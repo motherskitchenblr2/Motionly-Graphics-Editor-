@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a Motionly bug
+about: Report a Motify bug
 title: "[Bug]: "
 labels: bug
 assignees: ""
@@ -22,8 +22,8 @@ assignees: ""
 
 - OS:
 - Browser:
-- Motionly version or commit:
+- Motify version or commit:
 
 ## Evidence
 
-Add screenshots, GIFs, logs, or a minimal `.motion` file if possible.
+Add screenshots, GIFs, logs, or a minimal TypeScript composition if possible.

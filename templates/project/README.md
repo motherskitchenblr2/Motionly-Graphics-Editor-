@@ -1,25 +1,11 @@
 # {{name}}
 
-This is a local Motionly project.
+This is a local Motify v2 project. Author visuals in `composition.html`, optional extra CSS in `styles.css`, choreography in `timeline.js`, and keep `index.ts` limited to metadata plus mounting.
 
-Motionly starts the project automatically after `init`. To reopen it later:
+Keep selectable elements marked with stable `data-edit` ids. Preview and export mount the same HTML and seek the same GSAP timeline.
 
 ```bash
-npx @coppsary/motionly dev
+npx @coppsary/motify dev
 ```
 
-Motionly opens `project.motion`, resolves media from `assets/` by filename, and saves visual edits back to the project file. Put images, SVG, video, and audio in `assets/`, then import them from `project.motion`, for example:
-
-```motion
-import "./assets/logo.svg" as logo
-```
-
-The browser-only Motionly editor remains available with `npx @coppsary/motionly`.
-
-## Create with an agent
-
-The installed skill is available as `/motionly`. Start your prompt with it so the agent loads the Motionly authoring workflow and references:
-
-```text
-/motionly Inspect the assets in this project, storyboard the animation, and create or refine project.motion.
-```
+Put local images, audio, and video in `assets/` and reference them as `/assets/filename.ext`.

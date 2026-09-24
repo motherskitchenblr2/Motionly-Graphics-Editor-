@@ -1,0 +1,2104 @@
+<template id="kiritts-preset-template">
+  <style>
+    @font-face {
+      font-family: "SF Pro Display";
+      font-style: normal;
+      font-weight: 400;
+      font-display: block;
+      src: url("__ASSET_SF_FONT_BASE__SFPRODISPLAYREGULAR.OTF")
+        format("opentype");
+    }
+    @font-face {
+      font-family: "SF Pro Display";
+      font-style: normal;
+      font-weight: 500;
+      font-display: block;
+      src: url("__ASSET_SF_FONT_BASE__SFPRODISPLAYMEDIUM.OTF")
+        format("opentype");
+    }
+    @font-face {
+      font-family: "SF Pro Display";
+      font-style: normal;
+      font-weight: 700;
+      font-display: block;
+      src: url("__ASSET_SF_FONT_BASE__SFPRODISPLAYBOLD.OTF") format("opentype");
+    }
+    /* Khmer is set in Kantumruy Pro, not left to a system fallback. Bundled
+       as the Khmer subset so preview and export render it identically. */
+    @font-face {
+      font-family: "Kantumruy Pro";
+      font-style: normal;
+      font-weight: 100 700;
+      font-display: block;
+      src: url("__ASSET_KHMER_FONT_BASE__KantumruyPro-Khmer.woff2")
+        format("woff2");
+    }
+    .kiri-film,
+    .kiri-film * {
+      box-sizing: border-box;
+    }
+    .kiri-film {
+      --ink: #f3f3f6;
+      --dim: #a6a6b1;
+      --faint: #74747f;
+      --accent: #f0a44a;
+      --line: #ffffff1c;
+      --plate: #131316;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #090909;
+      color: var(--ink);
+      font-family:
+        "SF Pro Display",
+        -apple-system,
+        Inter,
+        sans-serif;
+      font-weight: 400;
+    }
+    .kiri-film h1,
+    .kiri-film p {
+      margin: 0;
+    }
+    .kiri-film button {
+      font: inherit;
+      border: 0;
+      color: inherit;
+      background: none;
+    }
+    /* Perspective sits on the two containers whose children actually rotate,
+       and nothing declares preserve-3d. A shared 3D context would sort the
+       ground plane against the tilted panel and render their intersection as
+       a hard diagonal seam across the frame. */
+    .kiri-world {
+      position: absolute;
+      inset: 0;
+      perspective: 2000px;
+      perspective-origin: 50% 50%;
+    }
+    .kiri-layer {
+      position: absolute;
+      inset: 0;
+      perspective: 2000px;
+      perspective-origin: 50% 50%;
+    }
+    /* The lit ground lives outside the camera world, so the light source is
+       fixed to the frame and cannot drift in and out as the camera moves. */
+    .kiri-bloom {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 2400px;
+      height: 1700px;
+      margin: -850px 0 0 -1200px;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(255, 255, 255, 0.05),
+        rgba(255, 255, 255, 0.018) 40%,
+        transparent 68%
+      );
+      pointer-events: none;
+    }
+    .kiri-grid {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+      background-size: 88px 88px;
+      pointer-events: none;
+    }
+    .kiri-khmer {
+      font-family: "Kantumruy Pro", "SF Pro Display", sans-serif;
+      /* Khmer stacks diacritics above and below the baseline and it must not
+         be tracked in like the Latin display face. */
+      line-height: 1.52;
+      letter-spacing: 0;
+    }
+    .kiri-hook-khmer {
+      font-size: 92px;
+      font-weight: 700;
+    }
+    .kiri-app-mark {
+      display: grid;
+      place-items: center;
+      flex: none;
+      width: 34px;
+      height: 34px;
+    }
+    .kiri-app-mark img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    /* ---- Editorial type ------------------------------------------------- */
+    .kiri-title {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1560px;
+      text-align: center;
+      font-size: 96px;
+      font-weight: 700;
+      line-height: 1.06;
+      letter-spacing: -0.042em;
+    }
+    .kiri-title em {
+      font-style: normal;
+      color: var(--ink);
+    }
+    .kiri-kicker {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      font-size: 24px;
+      font-weight: 500;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: var(--faint);
+      white-space: nowrap;
+    }
+
+    /* ---- Icons ---------------------------------------------------------- */
+    .kiri-ic {
+      width: 1em;
+      height: 1em;
+      flex: none;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.85;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    /* ---- The brand tile, carried across the whole film ------------------ */
+    .kiri-mark {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 300px;
+      height: 300px;
+      border-radius: 90px;
+      z-index: 18;
+      overflow: hidden;
+      background: linear-gradient(150deg, #2a2a31, #16161a 62%);
+      border: 1px solid #ffffff22;
+      box-shadow:
+        0 60px 130px #000000a6,
+        inset 0 1px 0 #ffffff14;
+    }
+    .kiri-mark img {
+      position: absolute;
+      left: 57px;
+      top: 57px;
+      width: 186px;
+      height: 186px;
+      object-fit: contain;
+    }
+    .kiri-wordmark {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      font-size: 92px;
+      font-weight: 700;
+      letter-spacing: -0.055em;
+      white-space: nowrap;
+    }
+
+    /* ---- The shared stage carrier: no paint of its own ------------------ */
+    .kiri-stage {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1180px;
+      height: 150px;
+      border-radius: 26px;
+      z-index: 24;
+    }
+    .kiri-face {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      overflow: hidden;
+      background: linear-gradient(150deg, #202026, #141418);
+      border: 1px solid var(--line);
+      box-shadow: 0 40px 110px #00000080;
+    }
+
+    /* ---- Audio player face ---------------------------------------------- */
+    .kiri-audio-face {
+      display: flex;
+      align-items: center;
+      gap: 30px;
+      padding: 0 40px;
+    }
+    .kiri-transport {
+      width: 62px;
+      height: 62px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #ffffff10;
+      border: 1px solid #ffffff22;
+      font-size: 26px;
+    }
+    .kiri-wave-wrap {
+      position: relative;
+      flex: 1;
+      height: 100%;
+      min-width: 0;
+    }
+    .kiri-wave {
+      position: absolute;
+      inset: 14px 0;
+    }
+    .kiri-wave svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+      overflow: visible;
+    }
+    .kiri-wave rect {
+      transform-box: fill-box;
+      transform-origin: center;
+    }
+    .kiri-wave-base rect {
+      fill: #ffffff2e;
+    }
+    .kiri-wave-played rect {
+      fill: var(--accent);
+    }
+    .kiri-playhead {
+      position: absolute;
+      top: 6px;
+      bottom: 6px;
+      left: 0;
+      width: 2px;
+      border-radius: 2px;
+      background: var(--ink);
+      box-shadow: 0 0 14px #ffffff8c;
+    }
+    .kiri-audio-time {
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--dim);
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+    .kiri-audio-label {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 21px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--faint);
+      white-space: nowrap;
+    }
+    .kiri-audio-label .kiri-ic {
+      font-size: 24px;
+      color: var(--accent);
+    }
+
+    /* ---- Upload face (Speech to Text) ----------------------------------- */
+    .kiri-drop-face {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 22px;
+      text-align: center;
+    }
+    .kiri-segmented {
+      display: flex;
+      gap: 6px;
+      padding: 6px;
+      border-radius: 16px;
+      background: #ffffff0d;
+      border: 1px solid var(--line);
+      font-size: 23px;
+      font-weight: 500;
+    }
+    .kiri-segmented span {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 26px;
+      border-radius: 11px;
+      color: var(--dim);
+    }
+    .kiri-segmented span:first-child {
+      background: #ededf0;
+      color: #17171a;
+    }
+    .kiri-drop-icon {
+      width: 108px;
+      height: 108px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #ffffff0f;
+      border: 1px solid #ffffff1f;
+      font-size: 46px;
+    }
+    .kiri-drop-title {
+      font-size: 40px;
+      font-weight: 500;
+      letter-spacing: -0.025em;
+    }
+    .kiri-drop-note {
+      font-size: 23px;
+      line-height: 1.45;
+      color: var(--dim);
+    }
+    .kiri-choose {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 17px 32px;
+      border-radius: 999px;
+      background: #ededf0;
+      color: #17171a;
+      font-size: 24px;
+      font-weight: 500;
+    }
+
+    /* ---- Transcript face ------------------------------------------------ */
+    .kiri-transcript {
+      padding: 34px 46px;
+      background: linear-gradient(170deg, #17171b, #121215);
+    }
+    .kiri-doc-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-size: 23px;
+      font-weight: 500;
+      color: var(--dim);
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    .kiri-doc-header .kiri-ic {
+      font-size: 26px;
+      color: var(--accent);
+    }
+    .kiri-doc-status {
+      margin-left: auto;
+      color: var(--faint);
+    }
+    .kiri-doc-chip {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 7px 15px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #ffffff08;
+      font-size: 20px;
+      color: var(--dim);
+    }
+    .kiri-doc-chip .kiri-ic {
+      font-size: 21px;
+      color: var(--accent);
+    }
+    .kiri-segment {
+      margin-top: 24px;
+      padding-left: 22px;
+      border-left: 3px solid #b0bdd6;
+    }
+    .kiri-segment:nth-of-type(2) {
+      border-color: #c9ab7a;
+    }
+    .kiri-segment:nth-of-type(3) {
+      border-color: #a9c0ab;
+    }
+    .kiri-segment-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 21px;
+      font-weight: 500;
+      color: var(--faint);
+      margin-bottom: 9px;
+    }
+    .kiri-segment p {
+      font-size: 33px;
+      line-height: 1.26;
+      letter-spacing: -0.018em;
+    }
+    .kiri-export-controls {
+      position: absolute;
+      left: 46px;
+      right: 46px;
+      bottom: 32px;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+    .kiri-format {
+      border: 1px solid #ffffff26;
+      border-radius: 11px;
+      padding: 12px 19px;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--dim);
+    }
+    .kiri-format:first-child {
+      background: #ededf0;
+      border-color: #ededf0;
+      color: #1a1a1d;
+    }
+    .kiri-export-button {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      border-radius: 12px;
+      padding: 15px 30px;
+      background: #ededf0;
+      color: #1a1a1d;
+      font-size: 24px;
+      font-weight: 500;
+    }
+
+    /* ---- The Generate Speech application panel -------------------------- */
+    .kiri-app {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1660px;
+      height: 880px;
+      border-radius: 22px;
+      overflow: hidden;
+      background: #0e0e10;
+      border: 1px solid #ffffff1a;
+      box-shadow:
+        0 90px 180px #000000b3,
+        inset 0 1px 0 #ffffff12;
+    }
+    .kiri-app-bar {
+      height: 74px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 0 30px;
+      border-bottom: 1px solid #ffffff14;
+      font-size: 22px;
+      font-weight: 500;
+    }
+    .kiri-app-bar .kiri-ic {
+      font-size: 22px;
+      color: var(--dim);
+    }
+    .kiri-crumb-sep {
+      color: var(--faint);
+    }
+    .kiri-crumb-dim {
+      color: var(--dim);
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .kiri-app-bar-right {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .kiri-credits {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 18px;
+      border-radius: 999px;
+      background: #ffffff0d;
+      border: 1px solid var(--line);
+      color: var(--accent);
+      font-size: 21px;
+      font-weight: 500;
+    }
+    .kiri-iconbtn {
+      width: 42px;
+      height: 42px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      background: #ffffff0a;
+      border: 1px solid var(--line);
+      font-size: 21px;
+      color: var(--dim);
+    }
+    .kiri-app-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(140deg, #f0a44a, #b46a22);
+      color: #17120a;
+      font-size: 20px;
+      font-weight: 700;
+    }
+    .kiri-app-body {
+      display: flex;
+      height: 806px;
+    }
+    .kiri-app-main {
+      position: relative;
+      flex: 1;
+      padding: 30px 42px;
+      min-width: 0;
+    }
+    .kiri-voice-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 13px;
+      padding: 13px 22px;
+      border-radius: 999px;
+      background: #ffffff0d;
+      border: 1px solid #ffffff24;
+      font-size: 24px;
+      font-weight: 500;
+    }
+    .kiri-mic-dot {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #ffffff14;
+      font-size: 19px;
+    }
+    .kiri-chevron {
+      font-size: 22px;
+      color: var(--dim);
+    }
+    .kiri-composer {
+      position: relative;
+      margin-top: 22px;
+      height: 322px;
+      border-radius: 18px;
+      background: var(--plate);
+      border: 1px solid var(--line);
+      padding: 28px 32px;
+      font-size: 36px;
+      line-height: 1.34;
+      letter-spacing: -0.022em;
+    }
+    /* The hint is lifted out of flow so the typed script starts at the
+       caret position rather than after the placeholder it replaces. */
+    .kiri-placeholder {
+      position: absolute;
+      left: 32px;
+      right: 32px;
+      top: 28px;
+      color: var(--faint);
+    }
+    .kiri-caret {
+      display: inline-block;
+      width: 3px;
+      height: 38px;
+      background: var(--ink);
+      vertical-align: -6px;
+      margin-left: 3px;
+    }
+    .kiri-composer-tools {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-top: 20px;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--dim);
+    }
+    .kiri-composer-tools span {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 11px 22px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: #ffffff08;
+    }
+    .kiri-starters {
+      position: absolute;
+      left: 42px;
+      right: 42px;
+      bottom: 130px;
+    }
+    .kiri-starters-label {
+      font-size: 21px;
+      color: var(--faint);
+      margin-bottom: 14px;
+    }
+    .kiri-starter-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 11px;
+      font-size: 21px;
+      font-weight: 500;
+      color: var(--dim);
+    }
+    .kiri-starter-row span {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 11px 20px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+    }
+    .kiri-app-footer {
+      position: absolute;
+      left: 42px;
+      right: 42px;
+      bottom: 34px;
+      display: flex;
+      align-items: center;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--dim);
+    }
+    .kiri-import {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+    .kiri-count {
+      margin-left: auto;
+      margin-right: 26px;
+      color: var(--faint);
+      letter-spacing: 0.04em;
+    }
+    .kiri-generate {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 17px 32px;
+      border-radius: 999px;
+      background: #ededf0;
+      color: #17171a;
+      font-size: 24px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .kiri-app-side {
+      width: 470px;
+      border-left: 1px solid #ffffff14;
+      padding: 26px 30px;
+      background: #0c0c0e;
+    }
+    .kiri-tabs {
+      display: flex;
+      gap: 26px;
+      font-size: 22px;
+      font-weight: 500;
+      color: var(--faint);
+      border-bottom: 1px solid #ffffff12;
+    }
+    .kiri-tabs span {
+      padding-bottom: 14px;
+    }
+    .kiri-tabs span:first-child {
+      color: var(--ink);
+      box-shadow: inset 0 -2px 0 var(--ink);
+    }
+    .kiri-side-block {
+      margin-top: 24px;
+    }
+    .kiri-side-title {
+      font-size: 22px;
+      font-weight: 500;
+    }
+    .kiri-side-note {
+      font-size: 19px;
+      color: var(--faint);
+      margin-top: 6px;
+    }
+    .kiri-side-label {
+      font-size: 21px;
+      font-weight: 500;
+      margin-bottom: 11px;
+    }
+    .kiri-side-select {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 13px;
+      background: #ffffff0a;
+      border: 1px solid var(--line);
+      font-size: 21px;
+      color: var(--dim);
+    }
+    .kiri-side-select .kiri-mic-dot {
+      width: 30px;
+      height: 30px;
+      font-size: 17px;
+      color: var(--ink);
+    }
+    .kiri-side-select .kiri-chevron {
+      margin-left: auto;
+      font-size: 20px;
+    }
+    .kiri-slider-head {
+      display: flex;
+      align-items: baseline;
+      font-size: 21px;
+      font-weight: 500;
+    }
+    .kiri-slider-head b {
+      margin-left: auto;
+      font-weight: 500;
+      color: var(--dim);
+    }
+    .kiri-track {
+      position: relative;
+      height: 4px;
+      border-radius: 2px;
+      background: #ffffff1c;
+      margin: 15px 0 10px;
+    }
+    .kiri-track i {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      border-radius: 2px;
+      background: #e9e9ee;
+    }
+    .kiri-thumb {
+      position: absolute;
+      top: 50%;
+      width: 17px;
+      height: 17px;
+      margin: -8.5px 0 0 -8.5px;
+      border-radius: 50%;
+      background: #f2f2f5;
+      box-shadow: 0 2px 8px #0009;
+    }
+    .kiri-track-ends {
+      display: flex;
+      justify-content: space-between;
+      font-size: 18px;
+      color: var(--faint);
+    }
+    .kiri-side-heading {
+      font-size: 17px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--faint);
+      margin-top: 30px;
+    }
+    .kiri-side-row {
+      display: flex;
+      align-items: center;
+      font-size: 21px;
+      font-weight: 500;
+      margin-top: 18px;
+    }
+    .kiri-mini-select {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      border-radius: 11px;
+      border: 1px solid var(--line);
+      background: #ffffff0a;
+      font-size: 19px;
+      color: var(--dim);
+    }
+    .kiri-toggle {
+      margin-left: auto;
+      width: 52px;
+      height: 30px;
+      border-radius: 999px;
+      background: #ededf0;
+      position: relative;
+    }
+    .kiri-toggle::after {
+      content: "";
+      position: absolute;
+      right: 3px;
+      top: 3px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #17171a;
+    }
+
+    /* ---- The voice picker, opened --------------------------------------- */
+    .kiri-voice-menu {
+      position: absolute;
+      left: 42px;
+      top: 92px;
+      width: 560px;
+      border-radius: 20px;
+      background: #171719;
+      border: 1px solid #ffffff26;
+      box-shadow: 0 50px 120px #000000bf;
+      padding: 14px;
+      z-index: 6;
+      transform-origin: 18% 0%;
+    }
+    .kiri-voice-list {
+      height: 392px;
+      overflow: hidden;
+    }
+    .kiri-voice-count {
+      margin-left: auto;
+      font-size: 18px;
+      color: var(--faint);
+    }
+    .kiri-voice-search {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 16px;
+      border-radius: 13px;
+      background: #ffffff0a;
+      border: 1px solid var(--line);
+      font-size: 21px;
+      color: var(--faint);
+      margin-bottom: 12px;
+    }
+    .kiri-voice-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 15px 16px;
+      border-radius: 14px;
+      border: 1px solid transparent;
+    }
+    .kiri-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #ffffff16;
+      font-size: 22px;
+      font-weight: 500;
+    }
+    .kiri-voice-row strong {
+      display: block;
+      font-size: 25px;
+      font-weight: 500;
+      letter-spacing: -0.015em;
+    }
+    .kiri-voice-row small {
+      display: block;
+      font-size: 19px;
+      color: var(--faint);
+      margin-top: 4px;
+    }
+    .kiri-voice-check {
+      margin-left: auto;
+      font-size: 26px;
+      color: var(--accent);
+    }
+
+    /* ---- Language beat --------------------------------------------------- */
+    .kiri-voice-card {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 356px;
+      height: 138px;
+      border: 1px solid #ffffff24;
+      border-radius: 24px;
+      display: flex;
+      align-items: center;
+      gap: 22px;
+      padding: 26px;
+      background: linear-gradient(140deg, #232329, #16161a);
+      box-shadow: 0 30px 80px #00000073;
+    }
+    .kiri-voice-card .kiri-avatar {
+      width: 62px;
+      height: 62px;
+      font-size: 28px;
+    }
+    .kiri-voice-card strong {
+      display: block;
+      font-size: 31px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+    .kiri-voice-card small {
+      display: block;
+      color: var(--faint);
+      font-size: 20px;
+      margin-top: 6px;
+    }
+
+    /* ---- Speech to Text proof columns ------------------------------------ */
+    .kiri-features {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1420px;
+      display: flex;
+      gap: 26px;
+    }
+    .kiri-feature {
+      flex: 1;
+      text-align: center;
+      padding: 0 20px;
+    }
+    .kiri-feature-icon {
+      width: 62px;
+      height: 62px;
+      margin: 0 auto 18px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: #ffffff0f;
+      border: 1px solid var(--line);
+      font-size: 27px;
+      color: var(--accent);
+    }
+    .kiri-feature strong {
+      display: block;
+      font-size: 28px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+    .kiri-feature small {
+      display: block;
+      font-size: 21px;
+      line-height: 1.4;
+      color: var(--faint);
+      margin-top: 9px;
+    }
+
+    /* A selected voice and two alternatives, at a readable scale. The full
+       thirteen-voice library remains in the actual product picker. */
+    .kiri-voices-heading {
+      font-size: 52px;
+      font-weight: 500;
+      color: var(--ink);
+      letter-spacing: -0.025em;
+      text-transform: none;
+    }
+    .kiri-gallery {
+      perspective: 1800px;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1390px;
+      display: flex;
+      justify-content: center;
+      gap: 28px;
+    }
+    .kiri-gallery-card {
+      width: 440px;
+      height: 210px;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      padding: 36px;
+      border-radius: 24px;
+      border: 1px solid var(--line);
+      background: #18181c;
+      box-shadow: 0 22px 60px #00000040;
+    }
+    .kiri-gallery-card .kiri-avatar {
+      width: 82px;
+      height: 82px;
+      font-size: 36px;
+    }
+    .kiri-gallery-card strong {
+      display: block;
+      font-size: 46px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+    .kiri-gallery-card small {
+      display: block;
+      font-size: 24px;
+      color: var(--dim);
+      margin-top: 10px;
+    }
+    .kiri-feature-grid {
+      perspective: 2200px;
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1390px;
+      height: 530px;
+    }
+    .kiri-feature-card {
+      position: absolute;
+      inset: 0;
+    }
+    .kiri-feature-card h2 {
+      margin: 0 0 52px;
+      text-align: center;
+      font-size: 68px;
+      font-weight: 500;
+      letter-spacing: -0.035em;
+    }
+    .kiri-proof-row {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+    .kiri-proof-surface {
+      flex: 1;
+      padding: 38px;
+      border: 1px solid var(--line);
+      background: #18181c;
+      border-radius: 26px;
+    }
+    .kiri-proof-label {
+      color: var(--dim);
+      font-size: 21px;
+      letter-spacing: 0.1em;
+    }
+    .kiri-proof-surface pre {
+      font-size: 28px;
+      line-height: 1.5;
+      margin: 24px 0 0;
+      color: var(--ink);
+    }
+    .kiri-proof-arrow {
+      font-size: 62px;
+      color: var(--accent);
+    }
+    .kiri-proof-wave {
+      display: block;
+      width: 100%;
+      height: 132px;
+      fill: var(--accent);
+    }
+    .kiri-proof-surface strong {
+      font-size: 30px;
+      font-weight: 500;
+    }
+    .kiri-browser-proof {
+      width: 1140px;
+      margin: auto;
+    }
+    .kiri-browser-proof p {
+      font-size: 46px;
+      margin: 28px 0;
+      letter-spacing: -0.02em;
+    }
+    .kiri-browser-proof p span {
+      padding: 4px 10px;
+      border-radius: 7px;
+    }
+    .kiri-browser-player {
+      display: flex;
+      align-items: center;
+      gap: 26px;
+      border-top: 1px solid var(--line);
+      padding-top: 16px;
+    }
+    .kiri-browser-player > span {
+      color: var(--accent);
+      font-size: 35px;
+    }
+    .kiri-browser-player .kiri-proof-wave {
+      width: 360px;
+      height: 72px;
+      margin-left: auto;
+    }
+
+    /* ---- Export artefacts ------------------------------------------------ */
+    .kiri-export-file {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 264px;
+      height: 326px;
+      padding: 32px;
+      background: linear-gradient(150deg, #26262c, #141418);
+      border: 1px solid #ffffff2b;
+      border-radius: 26px;
+      box-shadow: 0 45px 100px #000000a6;
+      z-index: 13;
+    }
+    .kiri-export-file .kiri-ic {
+      font-size: 74px;
+      color: var(--accent);
+      margin-bottom: 34px;
+      stroke-width: 1.5;
+    }
+    .kiri-export-file strong {
+      display: block;
+      font-weight: 500;
+      font-size: 40px;
+      letter-spacing: -0.03em;
+    }
+    .kiri-export-file small {
+      display: block;
+      font-size: 19px;
+      margin-top: 9px;
+      color: var(--faint);
+    }
+
+    /* ---- Close ----------------------------------------------------------- */
+    .kiri-cta {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      padding: 20px 40px;
+      border-radius: 999px;
+      background: #ededf0;
+      color: #17171a;
+      font-size: 30px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    .kiri-cursor {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 44px;
+      height: 54px;
+      z-index: 40;
+      filter: drop-shadow(0 4px 7px #000000a6);
+    }
+  </style>
+  <main class="kiri-film" data-edit="kiriFilmRoot">
+    <div class="kiri-grid" data-edit="kiriGroundGrid"></div>
+    <div class="kiri-bloom" data-edit="kiriAmbientGlow"></div>
+    <div class="kiri-world" data-camera-world data-edit="kiriCameraWorld">
+      <!-- Shared actors. Siblings of every scene, so they cross the seams. -->
+      <div class="kiri-mark" data-edit="kiriBrandMark" data-transition-carrier>
+        <img src="__ASSET_KIRI_LOGO__" alt="KiriTTS" />
+      </div>
+      <div
+        class="kiri-stage"
+        data-edit="kiriVoiceCarrier"
+        data-transition-carrier
+      >
+        <div class="kiri-face kiri-audio-face" data-edit="kiriAudioFace">
+          <span class="kiri-transport" data-edit="kiriPlaySymbol">
+            <svg class="kiri-ic" viewBox="0 0 24 24">
+              <rect x="14" y="3" width="5" height="18" rx="1" />
+              <rect x="5" y="3" width="5" height="18" rx="1" />
+            </svg>
+          </span>
+          <div class="kiri-wave-wrap" data-edit="kiriWaveform">
+            <div class="kiri-wave kiri-wave-base" data-edit="kiriWaveBase">
+              <svg viewBox="0 0 1200 160">
+                <rect x="10" y="65.0" width="5" height="30" rx="2.5" />
+                <rect x="25" y="57.5" width="5" height="45" rx="2.5" />
+                <rect x="40" y="63.5" width="5" height="33" rx="2.5" />
+                <rect x="55" y="48.0" width="5" height="64" rx="2.5" />
+                <rect x="70" y="29.0" width="5" height="102" rx="2.5" />
+                <rect x="85" y="47.5" width="5" height="65" rx="2.5" />
+                <rect x="100" y="58.0" width="5" height="44" rx="2.5" />
+                <rect x="115" y="47.0" width="5" height="66" rx="2.5" />
+                <rect x="130" y="45.0" width="5" height="70" rx="2.5" />
+                <rect x="145" y="53.5" width="5" height="53" rx="2.5" />
+                <rect x="160" y="33.0" width="5" height="94" rx="2.5" />
+                <rect x="175" y="7.0" width="5" height="146" rx="2.5" />
+                <rect x="190" y="23.5" width="5" height="113" rx="2.5" />
+                <rect x="205" y="45.5" width="5" height="69" rx="2.5" />
+                <rect x="220" y="27.0" width="5" height="106" rx="2.5" />
+                <rect x="235" y="40.0" width="5" height="80" rx="2.5" />
+                <rect x="250" y="47.5" width="5" height="65" rx="2.5" />
+                <rect x="265" y="28.5" width="5" height="103" rx="2.5" />
+                <rect x="280" y="7.0" width="5" height="146" rx="2.5" />
+                <rect x="295" y="8.0" width="5" height="144" rx="2.5" />
+                <rect x="310" y="39.5" width="5" height="81" rx="2.5" />
+                <rect x="325" y="18.0" width="5" height="124" rx="2.5" />
+                <rect x="340" y="28.5" width="5" height="103" rx="2.5" />
+                <rect x="355" y="51.0" width="5" height="58" rx="2.5" />
+                <rect x="370" y="38.5" width="5" height="83" rx="2.5" />
+                <rect x="385" y="70.0" width="5" height="20" rx="2.5" />
+                <rect x="400" y="72.0" width="5" height="16" rx="2.5" />
+                <rect x="415" y="75.5" width="5" height="9" rx="2.5" />
+                <rect x="430" y="73.5" width="5" height="13" rx="2.5" />
+                <rect x="445" y="30.5" width="5" height="99" rx="2.5" />
+                <rect x="460" y="60.5" width="5" height="39" rx="2.5" />
+                <rect x="475" y="55.0" width="5" height="50" rx="2.5" />
+                <rect x="490" y="25.5" width="5" height="109" rx="2.5" />
+                <rect x="505" y="30.0" width="5" height="100" rx="2.5" />
+                <rect x="520" y="54.0" width="5" height="52" rx="2.5" />
+                <rect x="535" y="43.5" width="5" height="73" rx="2.5" />
+                <rect x="550" y="40.5" width="5" height="79" rx="2.5" />
+                <rect x="565" y="63.5" width="5" height="33" rx="2.5" />
+                <rect x="580" y="66.0" width="5" height="28" rx="2.5" />
+                <rect x="595" y="46.0" width="5" height="68" rx="2.5" />
+                <rect x="610" y="43.5" width="5" height="73" rx="2.5" />
+                <rect x="625" y="60.0" width="5" height="40" rx="2.5" />
+                <rect x="640" y="51.5" width="5" height="57" rx="2.5" />
+                <rect x="655" y="43.0" width="5" height="74" rx="2.5" />
+                <rect x="670" y="61.0" width="5" height="38" rx="2.5" />
+                <rect x="685" y="70.0" width="5" height="20" rx="2.5" />
+                <rect x="700" y="50.5" width="5" height="59" rx="2.5" />
+                <rect x="715" y="41.0" width="5" height="78" rx="2.5" />
+                <rect x="730" y="56.0" width="5" height="48" rx="2.5" />
+                <rect x="745" y="46.5" width="5" height="67" rx="2.5" />
+                <rect x="760" y="29.5" width="5" height="101" rx="2.5" />
+                <rect x="775" y="49.5" width="5" height="61" rx="2.5" />
+                <rect x="790" y="77.0" width="5" height="6" rx="2.5" />
+                <rect x="805" y="76.0" width="5" height="8" rx="2.5" />
+                <rect x="820" y="74.0" width="5" height="12" rx="2.5" />
+                <rect x="835" y="48.0" width="5" height="64" rx="2.5" />
+                <rect x="850" y="40.0" width="5" height="80" rx="2.5" />
+                <rect x="865" y="13.0" width="5" height="134" rx="2.5" />
+                <rect x="880" y="35.0" width="5" height="90" rx="2.5" />
+                <rect x="895" y="59.5" width="5" height="41" rx="2.5" />
+                <rect x="910" y="51.5" width="5" height="57" rx="2.5" />
+                <rect x="925" y="30.0" width="5" height="100" rx="2.5" />
+                <rect x="940" y="45.5" width="5" height="69" rx="2.5" />
+                <rect x="955" y="42.0" width="5" height="76" rx="2.5" />
+                <rect x="970" y="12.5" width="5" height="135" rx="2.5" />
+                <rect x="985" y="30.5" width="5" height="99" rx="2.5" />
+                <rect x="1000" y="58.5" width="5" height="43" rx="2.5" />
+                <rect x="1015" y="55.0" width="5" height="50" rx="2.5" />
+                <rect x="1030" y="43.5" width="5" height="73" rx="2.5" />
+                <rect x="1045" y="52.5" width="5" height="55" rx="2.5" />
+                <rect x="1060" y="53.5" width="5" height="53" rx="2.5" />
+                <rect x="1075" y="31.0" width="5" height="98" rx="2.5" />
+                <rect x="1090" y="40.5" width="5" height="79" rx="2.5" />
+                <rect x="1105" y="63.0" width="5" height="34" rx="2.5" />
+                <rect x="1120" y="61.5" width="5" height="37" rx="2.5" />
+                <rect x="1135" y="61.0" width="5" height="38" rx="2.5" />
+                <rect x="1150" y="64.0" width="5" height="32" rx="2.5" />
+                <rect x="1165" y="66.5" width="5" height="27" rx="2.5" />
+                <rect x="1180" y="54.0" width="5" height="52" rx="2.5" />
+              </svg>
+            </div>
+            <div class="kiri-wave kiri-wave-played" data-edit="kiriWavePlayed">
+              <svg viewBox="0 0 1200 160">
+                <rect x="10" y="65.0" width="5" height="30" rx="2.5" />
+                <rect x="25" y="57.5" width="5" height="45" rx="2.5" />
+                <rect x="40" y="63.5" width="5" height="33" rx="2.5" />
+                <rect x="55" y="48.0" width="5" height="64" rx="2.5" />
+                <rect x="70" y="29.0" width="5" height="102" rx="2.5" />
+                <rect x="85" y="47.5" width="5" height="65" rx="2.5" />
+                <rect x="100" y="58.0" width="5" height="44" rx="2.5" />
+                <rect x="115" y="47.0" width="5" height="66" rx="2.5" />
+                <rect x="130" y="45.0" width="5" height="70" rx="2.5" />
+                <rect x="145" y="53.5" width="5" height="53" rx="2.5" />
+                <rect x="160" y="33.0" width="5" height="94" rx="2.5" />
+                <rect x="175" y="7.0" width="5" height="146" rx="2.5" />
+                <rect x="190" y="23.5" width="5" height="113" rx="2.5" />
+                <rect x="205" y="45.5" width="5" height="69" rx="2.5" />
+                <rect x="220" y="27.0" width="5" height="106" rx="2.5" />
+                <rect x="235" y="40.0" width="5" height="80" rx="2.5" />
+                <rect x="250" y="47.5" width="5" height="65" rx="2.5" />
+                <rect x="265" y="28.5" width="5" height="103" rx="2.5" />
+                <rect x="280" y="7.0" width="5" height="146" rx="2.5" />
+                <rect x="295" y="8.0" width="5" height="144" rx="2.5" />
+                <rect x="310" y="39.5" width="5" height="81" rx="2.5" />
+                <rect x="325" y="18.0" width="5" height="124" rx="2.5" />
+                <rect x="340" y="28.5" width="5" height="103" rx="2.5" />
+                <rect x="355" y="51.0" width="5" height="58" rx="2.5" />
+                <rect x="370" y="38.5" width="5" height="83" rx="2.5" />
+                <rect x="385" y="70.0" width="5" height="20" rx="2.5" />
+                <rect x="400" y="72.0" width="5" height="16" rx="2.5" />
+                <rect x="415" y="75.5" width="5" height="9" rx="2.5" />
+                <rect x="430" y="73.5" width="5" height="13" rx="2.5" />
+                <rect x="445" y="30.5" width="5" height="99" rx="2.5" />
+                <rect x="460" y="60.5" width="5" height="39" rx="2.5" />
+                <rect x="475" y="55.0" width="5" height="50" rx="2.5" />
+                <rect x="490" y="25.5" width="5" height="109" rx="2.5" />
+                <rect x="505" y="30.0" width="5" height="100" rx="2.5" />
+                <rect x="520" y="54.0" width="5" height="52" rx="2.5" />
+                <rect x="535" y="43.5" width="5" height="73" rx="2.5" />
+                <rect x="550" y="40.5" width="5" height="79" rx="2.5" />
+                <rect x="565" y="63.5" width="5" height="33" rx="2.5" />
+                <rect x="580" y="66.0" width="5" height="28" rx="2.5" />
+                <rect x="595" y="46.0" width="5" height="68" rx="2.5" />
+                <rect x="610" y="43.5" width="5" height="73" rx="2.5" />
+                <rect x="625" y="60.0" width="5" height="40" rx="2.5" />
+                <rect x="640" y="51.5" width="5" height="57" rx="2.5" />
+                <rect x="655" y="43.0" width="5" height="74" rx="2.5" />
+                <rect x="670" y="61.0" width="5" height="38" rx="2.5" />
+                <rect x="685" y="70.0" width="5" height="20" rx="2.5" />
+                <rect x="700" y="50.5" width="5" height="59" rx="2.5" />
+                <rect x="715" y="41.0" width="5" height="78" rx="2.5" />
+                <rect x="730" y="56.0" width="5" height="48" rx="2.5" />
+                <rect x="745" y="46.5" width="5" height="67" rx="2.5" />
+                <rect x="760" y="29.5" width="5" height="101" rx="2.5" />
+                <rect x="775" y="49.5" width="5" height="61" rx="2.5" />
+                <rect x="790" y="77.0" width="5" height="6" rx="2.5" />
+                <rect x="805" y="76.0" width="5" height="8" rx="2.5" />
+                <rect x="820" y="74.0" width="5" height="12" rx="2.5" />
+                <rect x="835" y="48.0" width="5" height="64" rx="2.5" />
+                <rect x="850" y="40.0" width="5" height="80" rx="2.5" />
+                <rect x="865" y="13.0" width="5" height="134" rx="2.5" />
+                <rect x="880" y="35.0" width="5" height="90" rx="2.5" />
+                <rect x="895" y="59.5" width="5" height="41" rx="2.5" />
+                <rect x="910" y="51.5" width="5" height="57" rx="2.5" />
+                <rect x="925" y="30.0" width="5" height="100" rx="2.5" />
+                <rect x="940" y="45.5" width="5" height="69" rx="2.5" />
+                <rect x="955" y="42.0" width="5" height="76" rx="2.5" />
+                <rect x="970" y="12.5" width="5" height="135" rx="2.5" />
+                <rect x="985" y="30.5" width="5" height="99" rx="2.5" />
+                <rect x="1000" y="58.5" width="5" height="43" rx="2.5" />
+                <rect x="1015" y="55.0" width="5" height="50" rx="2.5" />
+                <rect x="1030" y="43.5" width="5" height="73" rx="2.5" />
+                <rect x="1045" y="52.5" width="5" height="55" rx="2.5" />
+                <rect x="1060" y="53.5" width="5" height="53" rx="2.5" />
+                <rect x="1075" y="31.0" width="5" height="98" rx="2.5" />
+                <rect x="1090" y="40.5" width="5" height="79" rx="2.5" />
+                <rect x="1105" y="63.0" width="5" height="34" rx="2.5" />
+                <rect x="1120" y="61.5" width="5" height="37" rx="2.5" />
+                <rect x="1135" y="61.0" width="5" height="38" rx="2.5" />
+                <rect x="1150" y="64.0" width="5" height="32" rx="2.5" />
+                <rect x="1165" y="66.5" width="5" height="27" rx="2.5" />
+                <rect x="1180" y="54.0" width="5" height="52" rx="2.5" />
+              </svg>
+            </div>
+            <div class="kiri-playhead" data-edit="kiriPlayhead"></div>
+          </div>
+          <span class="kiri-audio-time" data-edit="kiriAudioTime"
+            >00:04 / 00:04</span
+          >
+        </div>
+        <div class="kiri-face kiri-drop-face" data-edit="kiriDropFace">
+          <div class="kiri-segmented" data-edit="kiriUploadToggle">
+            <span>
+              <svg class="kiri-ic" viewBox="0 0 24 24">
+                <path d="M12 3v12" />
+                <path d="m17 8-5-5-5 5" />
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              </svg>
+              Upload
+            </span>
+            <span>
+              <svg class="kiri-ic" viewBox="0 0 24 24">
+                <path d="M12 19v3" />
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                <rect x="9" y="2" width="6" height="13" rx="3" />
+              </svg>
+              Record
+            </span>
+          </div>
+          <div class="kiri-drop-icon" data-edit="kiriDropIcon">
+            <svg class="kiri-ic" viewBox="0 0 24 24">
+              <path d="M12 3v12" />
+              <path d="m17 8-5-5-5 5" />
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            </svg>
+          </div>
+          <div class="kiri-drop-title" data-edit="kiriDropTitle">
+            Upload Your Audio
+          </div>
+          <div class="kiri-drop-note">
+            Drag and drop an audio file or click the button below.<br />Supported:
+            MP3, WAV, M4A.
+          </div>
+          <span class="kiri-choose" data-edit="kiriChooseFile">
+            <svg class="kiri-ic" viewBox="0 0 24 24">
+              <path d="M12 3v12" />
+              <path d="m17 8-5-5-5 5" />
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            </svg>
+            Choose File
+          </span>
+        </div>
+        <div class="kiri-face kiri-transcript" data-edit="kiriTranscriptFace">
+          <div class="kiri-doc-header">
+            <svg class="kiri-ic" viewBox="0 0 24 24">
+              <path
+                d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"
+              />
+            </svg>
+            <span>interview.mp3</span>
+            <span class="kiri-doc-chip" data-edit="kiriDocSpeakers">
+              <svg class="kiri-ic" viewBox="0 0 24 24">
+                <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                <path d="M16 3.128a4 4 0 0 1 0 7.744" />
+                <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                <circle cx="9" cy="7" r="4" />
+              </svg>
+              3 speakers
+            </span>
+            <span class="kiri-doc-chip" data-edit="kiriDocLanguages">
+              <svg class="kiri-ic" viewBox="0 0 24 24">
+                <path d="m5 8 6 6" />
+                <path d="m4 14 6-6 2-3" />
+                <path d="M2 5h12" />
+                <path d="M7 2h1" />
+                <path d="m22 22-5-10-5 10" />
+                <path d="M14 18h6" />
+              </svg>
+              Khmer + English
+            </span>
+            <span class="kiri-doc-status"
+              >Transcribed &nbsp; 00:12 / 00:12</span
+            >
+          </div>
+          <div class="kiri-segment" data-edit="kiriSpeakerOne">
+            <div class="kiri-segment-meta">
+              <span>Speaker 1</span><span>00:00.000 &ndash; 00:04.200</span>
+            </div>
+            <p>Welcome to Kiri TTS. Let me walk you through the recording.</p>
+          </div>
+          <div class="kiri-segment" data-edit="kiriSpeakerTwo">
+            <div class="kiri-segment-meta">
+              <span>Speaker 2</span><span>00:04.400 &ndash; 00:08.800</span>
+            </div>
+            <p>Sounds good &mdash; I have already uploaded the audio file.</p>
+          </div>
+          <div class="kiri-segment" data-edit="kiriSpeakerThree">
+            <div class="kiri-segment-meta">
+              <span>Speaker 3</span><span>00:09.000 &ndash; 00:12.000</span>
+            </div>
+            <p>Great, the transcript is ready to export.</p>
+          </div>
+          <div class="kiri-export-controls" data-edit="kiriExportControls">
+            <span class="kiri-format">SRT</span>
+            <span class="kiri-format">VTT</span>
+            <span class="kiri-format">JSON</span>
+            <span class="kiri-format">TXT</span>
+            <span class="kiri-format">CSV</span>
+            <button class="kiri-export-button" data-edit="kiriExportButton">
+              <svg class="kiri-ic" viewBox="0 0 24 24">
+                <path d="M12 15V3" />
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <path d="m7 10 5 5 5-5" />
+              </svg>
+              Export
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="kiri-audio-label" data-edit="kiriAudioLabel">
+        <svg class="kiri-ic" viewBox="0 0 24 24">
+          <path d="M2 10v3" />
+          <path d="M6 6v11" />
+          <path d="M10 3v18" />
+          <path d="M14 8v7" />
+          <path d="M18 5v13" />
+          <path d="M22 10v3" />
+        </svg>
+        Maly / generated speech
+      </div>
+      <svg class="kiri-cursor" viewBox="0 0 40 52" data-edit="kiriCursor">
+        <path
+          d="M3 3v39l10-10 9 17 8-4-9-16 14-2Z"
+          fill="#f4f4f6"
+          stroke="#141416"
+          stroke-width="2"
+        />
+      </svg>
+
+      <!-- 01 / The hook, oversized and alone on the ground. -->
+      <section class="kiri-layer" data-scene="hook" data-edit="kiriHookScene">
+        <h1 class="kiri-title" data-edit="kiriHookLine">
+          A TTS that speaks <em>Khmer</em>.
+        </h1>
+        <h1
+          class="kiri-title kiri-khmer kiri-hook-khmer"
+          lang="km"
+          data-edit="kiriHookKhmer"
+        >
+          សួស្តី ខ្ញុំជា <em>KiriTTS</em>។
+        </h1>
+      </section>
+
+      <!-- 02 / The mark, as an object. -->
+      <section class="kiri-layer" data-scene="intro" data-edit="kiriIntroScene">
+        <div class="kiri-wordmark" data-edit="kiriIntroName">KiriTTS</div>
+        <div class="kiri-kicker" data-edit="kiriIntroKicker">
+          Your audio workflow, simplified
+        </div>
+      </section>
+
+      <!-- 03 / Generate Speech, the real screen. -->
+      <section
+        class="kiri-layer"
+        data-scene="tts"
+        data-edit="kiriTtsScene"
+        style="z-index: 20"
+      >
+        <div class="kiri-app" data-edit="kiriEditor">
+          <div class="kiri-app-bar">
+            <span class="kiri-app-mark" data-edit="kiriAppMarkSlot">
+              <img src="__ASSET_KIRI_LOGO__" alt="" />
+            </span>
+            <span>Generate Speech</span>
+            <span class="kiri-crumb-sep">/</span>
+            <span class="kiri-crumb-dim">
+              <svg class="kiri-ic" viewBox="0 0 24 24">
+                <path
+                  d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+                />
+              </svg>
+              Default
+            </span>
+            <svg class="kiri-ic" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="1" />
+              <circle cx="12" cy="5" r="1" />
+              <circle cx="12" cy="19" r="1" />
+            </svg>
+            <span class="kiri-app-bar-right">
+              <span class="kiri-credits">
+                <svg class="kiri-ic" viewBox="0 0 24 24">
+                  <path
+                    d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                  />
+                </svg>
+                <span data-edit="kiriCredits">4,800,363</span>
+              </span>
+              <span class="kiri-iconbtn">
+                <svg class="kiri-ic" viewBox="0 0 24 24">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                  <path d="M2 12h20" />
+                </svg>
+              </span>
+              <span class="kiri-iconbtn">
+                <svg class="kiri-ic" viewBox="0 0 24 24">
+                  <rect width="20" height="14" x="2" y="3" rx="2" />
+                  <line x1="8" x2="16" y1="21" y2="21" />
+                  <line x1="12" x2="12" y1="17" y2="21" />
+                </svg>
+              </span>
+              <span class="kiri-app-avatar">A</span>
+            </span>
+          </div>
+          <div class="kiri-app-body">
+            <div class="kiri-app-main">
+              <span class="kiri-voice-pill" data-edit="kiriVoicePill">
+                <span class="kiri-mic-dot">
+                  <svg class="kiri-ic" viewBox="0 0 24 24">
+                    <path d="M12 19v3" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <rect x="9" y="2" width="6" height="13" rx="3" />
+                  </svg>
+                </span>
+                <span data-edit="kiriVoicePillLabel">Select voice</span>
+                <svg class="kiri-ic kiri-chevron" viewBox="0 0 24 24">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </span>
+              <div class="kiri-composer" data-edit="kiriComposer">
+                <span class="kiri-placeholder" data-edit="kiriComposerHint"
+                  >Type or paste your text here... Tip: [break=2s] adds a
+                  pause.</span
+                ><span data-edit="kiriInputWords"
+                  >Welcome to our product. Let's bring your ideas to life.</span
+                ><span class="kiri-caret" data-edit="kiriTypingCaret"></span>
+              </div>
+              <div class="kiri-composer-tools" data-edit="kiriComposerTools">
+                <span>
+                  <svg class="kiri-ic" viewBox="0 0 24 24">
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                  Paragraph
+                </span>
+                <span>
+                  <svg class="kiri-ic" viewBox="0 0 24 24">
+                    <rect x="14" y="3" width="5" height="18" rx="1" />
+                    <rect x="5" y="3" width="5" height="18" rx="1" />
+                  </svg>
+                  Pause
+                </span>
+              </div>
+              <div class="kiri-starters" data-edit="kiriStarters">
+                <div class="kiri-starters-label">Get started with</div>
+                <div class="kiri-starter-row">
+                  <span>
+                    <svg class="kiri-ic" viewBox="0 0 24 24">
+                      <path d="M12 7v14" />
+                      <path
+                        d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"
+                      />
+                    </svg>
+                    Tell a story
+                  </span>
+                  <span>
+                    <svg class="kiri-ic" viewBox="0 0 24 24">
+                      <path d="m5 8 6 6" />
+                      <path d="m4 14 6-6 2-3" />
+                      <path d="M2 5h12" />
+                      <path d="M7 2h1" />
+                      <path d="m22 22-5-10-5 10" />
+                      <path d="M14 18h6" />
+                    </svg>
+                    Speak Khmer
+                  </span>
+                  <span>
+                    <svg class="kiri-ic" viewBox="0 0 24 24">
+                      <circle cx="12" cy="12" r="10" />
+                      <path
+                        d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"
+                      />
+                      <path d="M2 12h20" />
+                    </svg>
+                    Switch mid-sentence
+                  </span>
+                  <span>
+                    <svg class="kiri-ic" viewBox="0 0 24 24">
+                      <path
+                        d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"
+                      />
+                    </svg>
+                    Call the action
+                  </span>
+                </div>
+              </div>
+              <div class="kiri-app-footer">
+                <span class="kiri-import">
+                  <svg class="kiri-ic" viewBox="0 0 24 24">
+                    <path
+                      d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+                    />
+                    <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+                    <path d="M10 9H8" />
+                    <path d="M16 13H8" />
+                    <path d="M16 17H8" />
+                  </svg>
+                  Import
+                </span>
+                <span class="kiri-count" data-edit="kiriCharCount"
+                  >0 / 5000</span
+                >
+                <button class="kiri-generate" data-edit="kiriGenerateButton">
+                  <span data-edit="kiriGenerateLabel">Generate Speech</span>
+                </button>
+              </div>
+              <div class="kiri-voice-menu" data-edit="kiriVoiceMenu">
+                <div class="kiri-voice-search">
+                  <svg class="kiri-ic" viewBox="0 0 24 24">
+                    <path d="m21 21-4.34-4.34" />
+                    <circle cx="11" cy="11" r="8" />
+                  </svg>
+                  <span>Search voices</span>
+                  <span class="kiri-voice-count">13 voices</span>
+                </div>
+                <div class="kiri-voice-list">
+                  <div class="kiri-voice-scroll" data-edit="kiriVoiceScroll">
+                    <div class="kiri-voice-row" data-edit="kiriVoiceNita">
+                      <span class="kiri-avatar">N</span>
+                      <span>
+                        <strong>Nita</strong
+                        ><small>Female &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceChanda">
+                      <span class="kiri-avatar">C</span>
+                      <span>
+                        <strong>Chanda</strong
+                        ><small>Male &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceBora">
+                      <span class="kiri-avatar">B</span>
+                      <span>
+                        <strong>Bora</strong
+                        ><small>Male &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceArun">
+                      <span class="kiri-avatar">A</span>
+                      <span>
+                        <strong>Arun</strong
+                        ><small>Male &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriMalySelect">
+                      <span class="kiri-avatar">M</span>
+                      <span>
+                        <strong>Maly</strong
+                        ><small>Female &middot; Standard</small>
+                      </span>
+                      <svg
+                        class="kiri-ic kiri-voice-check"
+                        viewBox="0 0 24 24"
+                        data-edit="kiriMalyCheck"
+                      >
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceNeary">
+                      <span class="kiri-avatar">N</span>
+                      <span>
+                        <strong>Neary</strong
+                        ><small>Female &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceOudom">
+                      <span class="kiri-avatar">O</span>
+                      <span>
+                        <strong>Oudom</strong
+                        ><small>Male &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoicePhanin">
+                      <span class="kiri-avatar">P</span>
+                      <span>
+                        <strong>Phanin</strong
+                        ><small>Female &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceRithy">
+                      <span class="kiri-avatar">R</span>
+                      <span>
+                        <strong>Rithy</strong
+                        ><small>Male &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceSetha">
+                      <span class="kiri-avatar">S</span>
+                      <span>
+                        <strong>Setha</strong
+                        ><small>Male &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceTheary">
+                      <span class="kiri-avatar">T</span>
+                      <span>
+                        <strong>Theary</strong
+                        ><small>Female &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceBosba">
+                      <span class="kiri-avatar">B</span>
+                      <span>
+                        <strong>Bosba</strong
+                        ><small>Female &middot; Standard</small>
+                      </span>
+                    </div>
+                    <div class="kiri-voice-row" data-edit="kiriVoiceBorey">
+                      <span class="kiri-avatar">B</span>
+                      <span>
+                        <strong>Borey</strong
+                        ><small>Male &middot; Standard</small>
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="kiri-app-side" data-edit="kiriAppSide">
+              <div class="kiri-tabs">
+                <span>Settings</span><span>History</span>
+              </div>
+              <div class="kiri-side-block">
+                <div class="kiri-side-title">Paragraph 1</div>
+                <div class="kiri-side-note" data-edit="kiriParagraphNote">
+                  Empty &mdash; start typing in the editor
+                </div>
+              </div>
+              <div class="kiri-side-block">
+                <div class="kiri-side-label">Voice</div>
+                <div class="kiri-side-select" data-edit="kiriSideVoice">
+                  <span class="kiri-mic-dot">
+                    <svg class="kiri-ic" viewBox="0 0 24 24">
+                      <path d="M12 19v3" />
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                      <rect x="9" y="2" width="6" height="13" rx="3" />
+                    </svg>
+                  </span>
+                  <span data-edit="kiriSideVoiceLabel">Select a voice</span>
+                  <svg class="kiri-ic kiri-chevron" viewBox="0 0 24 24">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </div>
+              </div>
+              <div class="kiri-side-block">
+                <div class="kiri-slider-head">Stability<b>1.70</b></div>
+                <div class="kiri-track">
+                  <i style="width: 34%"></i>
+                  <span class="kiri-thumb" style="left: 34%"></span>
+                </div>
+                <div class="kiri-track-ends">
+                  <span>Creative</span><span>Robust</span>
+                </div>
+              </div>
+              <div class="kiri-side-block">
+                <div class="kiri-slider-head">Speed<b>1.10x</b></div>
+                <div class="kiri-track">
+                  <i style="width: 79%"></i>
+                  <span class="kiri-thumb" style="left: 79%"></span>
+                </div>
+                <div class="kiri-track-ends">
+                  <span>Slower</span><span>Faster</span>
+                </div>
+              </div>
+              <div class="kiri-side-heading">Global settings</div>
+              <div class="kiri-side-row">
+                Generation mode
+                <span class="kiri-mini-select">
+                  Instant
+                  <svg class="kiri-ic" viewBox="0 0 24 24">
+                    <path d="m6 9 6 6 6-6" />
+                  </svg>
+                </span>
+              </div>
+              <div class="kiri-side-row">
+                Auto-play after generating
+                <span class="kiri-toggle"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- The uploaded recording, a shared object between 04 and 05. -->
+      <div
+        class="kiri-voice-card"
+        data-edit="kiriUploadFile"
+        style="width: 400px; z-index: 32"
+      >
+        <span class="kiri-avatar">
+          <svg class="kiri-ic" viewBox="0 0 24 24" style="font-size: 28px">
+            <path
+              d="M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"
+            />
+          </svg>
+        </span>
+        <span
+          ><strong>interview.mp3</strong
+          ><small>Recording &middot; 12 seconds</small></span
+        >
+      </div>
+
+      <!-- 05 / The same engine, in reverse. -->
+      <section class="kiri-layer" data-scene="stt" data-edit="kiriSttScene">
+        <h1 class="kiri-title" data-edit="kiriSttLine">
+          Already have a recording?<br />Kiri works in <em>reverse</em>.
+        </h1>
+      </section>
+
+      <!-- 06 / What the transcript releases. -->
+      <div
+        class="kiri-layer"
+        data-scene="export"
+        data-edit="kiriExportScene"
+        style="z-index: 30"
+      >
+        <div class="kiri-export-file" data-edit="kiriFileSRT">
+          <svg class="kiri-ic" viewBox="0 0 24 24">
+            <rect width="18" height="14" x="3" y="5" rx="2" ry="2" />
+            <path d="M7 15h4M15 15h2M7 11h2M13 11h4" />
+          </svg>
+          <strong>SRT</strong><small>interview.srt</small>
+        </div>
+        <div class="kiri-export-file" data-edit="kiriFileVTT">
+          <svg class="kiri-ic" viewBox="0 0 24 24">
+            <rect width="18" height="14" x="3" y="5" rx="2" ry="2" />
+            <path d="M7 15h4M15 15h2M7 11h2M13 11h4" />
+          </svg>
+          <strong>VTT</strong><small>interview.vtt</small>
+        </div>
+        <div class="kiri-export-file" data-edit="kiriFileJSON">
+          <svg class="kiri-ic" viewBox="0 0 24 24">
+            <path
+              d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+            />
+            <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+            <path d="M10 12.5 8 15l2 2.5" />
+            <path d="m14 12.5 2 2.5-2 2.5" />
+          </svg>
+          <strong>JSON</strong><small>interview.json</small>
+        </div>
+        <div class="kiri-export-file" data-edit="kiriFileTXT">
+          <svg class="kiri-ic" viewBox="0 0 24 24">
+            <path
+              d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+            />
+            <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+            <path d="M10 9H8" />
+            <path d="M16 13H8" />
+            <path d="M16 17H8" />
+          </svg>
+          <strong>TXT</strong><small>interview.txt</small>
+        </div>
+        <div class="kiri-export-file" data-edit="kiriFileCSV">
+          <svg class="kiri-ic" viewBox="0 0 24 24">
+            <path
+              d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"
+            />
+            <path d="M14 2v5a1 1 0 0 0 1 1h5" />
+            <path d="M8 13h2" />
+            <path d="M14 13h2" />
+            <path d="M8 17h2" />
+            <path d="M14 17h2" />
+          </svg>
+          <strong>CSV</strong><small>interview.csv</small>
+        </div>
+      </div>
+
+      <!-- 04 / Every voice on the account. -->
+      <section
+        class="kiri-layer"
+        data-scene="voices"
+        data-edit="kiriVoicesScene"
+      >
+        <div
+          class="kiri-kicker kiri-voices-heading"
+          data-edit="kiriVoicesKicker"
+        >
+          13 voices. Khmer and English.
+        </div>
+        <div class="kiri-gallery" data-edit="kiriVoiceGallery">
+          <div class="kiri-gallery-card" data-edit="kiriGalleryVoiceMaly">
+            <span class="kiri-avatar">M</span>
+            <span
+              ><strong>Maly</strong
+              ><small>Female &middot; Standard</small></span
+            >
+          </div>
+          <div class="kiri-gallery-card" data-edit="kiriGalleryVoiceNita">
+            <span class="kiri-avatar">N</span>
+            <span
+              ><strong>Nita</strong
+              ><small>Female &middot; Standard</small></span
+            >
+          </div>
+          <div class="kiri-gallery-card" data-edit="kiriGalleryVoiceChanda">
+            <span class="kiri-avatar">C</span>
+            <span
+              ><strong>Chanda</strong
+              ><small>Male &middot; Standard</small></span
+            >
+          </div>
+        </div>
+      </section>
+
+      <!-- 07 / What the platform does, in its own words. -->
+      <section
+        class="kiri-layer"
+        data-scene="features"
+        data-edit="kiriFeaturesScene"
+      >
+        <div class="kiri-kicker" data-edit="kiriFeaturesKicker">
+          One platform &middot; text to speech and back
+        </div>
+        <div class="kiri-feature-grid" data-edit="kiriFeatureGrid">
+          <div class="kiri-feature-card" data-edit="kiriFeatureApi">
+            <h2>Build voice into your app.</h2>
+            <div class="kiri-proof-row">
+              <div class="kiri-proof-surface">
+                <span class="kiri-proof-label">YOUR TEXT + VOICE</span>
+                <pre>
+{
+  "text": "Welcome to KiriTTS.",
+  "voice": "Maly"
+}</pre>
+              </div>
+              <span class="kiri-proof-arrow">&#8594;</span>
+              <div class="kiri-proof-surface" data-edit="kiriApiResult">
+                <span class="kiri-proof-label">AUDIO FOR YOUR PRODUCT</span
+                ><svg viewBox="0 0 410 110" class="kiri-proof-wave">
+                  <rect x="0" y="49.0" width="4" height="12" rx="2" />
+                  <rect x="12" y="40.5" width="4" height="29" rx="2" />
+                  <rect x="24" y="32.0" width="4" height="46" rx="2" />
+                  <rect x="36" y="23.5" width="4" height="63" rx="2" />
+                  <rect x="48" y="15.0" width="4" height="80" rx="2" />
+                  <rect x="60" y="44.0" width="4" height="22" rx="2" />
+                  <rect x="72" y="35.5" width="4" height="39" rx="2" />
+                  <rect x="84" y="27.0" width="4" height="56" rx="2" />
+                  <rect x="96" y="18.5" width="4" height="73" rx="2" />
+                  <rect x="108" y="47.5" width="4" height="15" rx="2" />
+                  <rect x="120" y="39.0" width="4" height="32" rx="2" />
+                  <rect x="132" y="30.5" width="4" height="49" rx="2" />
+                  <rect x="144" y="22.0" width="4" height="66" rx="2" />
+                  <rect x="156" y="13.5" width="4" height="83" rx="2" />
+                  <rect x="168" y="42.5" width="4" height="25" rx="2" />
+                  <rect x="180" y="34.0" width="4" height="42" rx="2" />
+                  <rect x="192" y="25.5" width="4" height="59" rx="2" />
+                  <rect x="204" y="17.0" width="4" height="76" rx="2" />
+                  <rect x="216" y="46.0" width="4" height="18" rx="2" />
+                  <rect x="228" y="37.5" width="4" height="35" rx="2" />
+                  <rect x="240" y="29.0" width="4" height="52" rx="2" />
+                  <rect x="252" y="20.5" width="4" height="69" rx="2" />
+                  <rect x="264" y="12.0" width="4" height="86" rx="2" />
+                  <rect x="276" y="41.0" width="4" height="28" rx="2" />
+                  <rect x="288" y="32.5" width="4" height="45" rx="2" />
+                  <rect x="300" y="24.0" width="4" height="62" rx="2" />
+                  <rect x="312" y="15.5" width="4" height="79" rx="2" />
+                  <rect x="324" y="44.5" width="4" height="21" rx="2" />
+                  <rect x="336" y="36.0" width="4" height="38" rx="2" />
+                  <rect x="348" y="27.5" width="4" height="55" rx="2" />
+                  <rect x="360" y="19.0" width="4" height="72" rx="2" />
+                  <rect x="372" y="48.0" width="4" height="14" rx="2" />
+                  <rect x="384" y="39.5" width="4" height="31" rx="2" />
+                  <rect x="396" y="31.0" width="4" height="48" rx="2" /></svg
+                ><strong>Powered by the Kiri API.</strong>
+              </div>
+            </div>
+          </div>
+          <div class="kiri-feature-card" data-edit="kiriFeatureBrowser">
+            <h2>Take your voice to every page.</h2>
+            <div class="kiri-proof-surface kiri-browser-proof">
+              <span class="kiri-proof-label">KIRI VOICE &amp; TRANSLATE</span>
+              <p>
+                <span data-edit="kiriBrowserHighlight"
+                  >Great ideas deserve to be heard.</span
+                >
+              </p>
+              <div class="kiri-browser-player" data-edit="kiriBrowserPlayer">
+                <span>&#9654;</span><strong>Read aloud with Maly</strong
+                ><svg viewBox="0 0 410 110" class="kiri-proof-wave">
+                  <rect x="0" y="49.0" width="4" height="12" rx="2" />
+                  <rect x="12" y="40.5" width="4" height="29" rx="2" />
+                  <rect x="24" y="32.0" width="4" height="46" rx="2" />
+                  <rect x="36" y="23.5" width="4" height="63" rx="2" />
+                  <rect x="48" y="15.0" width="4" height="80" rx="2" />
+                  <rect x="60" y="44.0" width="4" height="22" rx="2" />
+                  <rect x="72" y="35.5" width="4" height="39" rx="2" />
+                  <rect x="84" y="27.0" width="4" height="56" rx="2" />
+                  <rect x="96" y="18.5" width="4" height="73" rx="2" />
+                  <rect x="108" y="47.5" width="4" height="15" rx="2" />
+                  <rect x="120" y="39.0" width="4" height="32" rx="2" />
+                  <rect x="132" y="30.5" width="4" height="49" rx="2" />
+                  <rect x="144" y="22.0" width="4" height="66" rx="2" />
+                  <rect x="156" y="13.5" width="4" height="83" rx="2" />
+                  <rect x="168" y="42.5" width="4" height="25" rx="2" />
+                  <rect x="180" y="34.0" width="4" height="42" rx="2" />
+                  <rect x="192" y="25.5" width="4" height="59" rx="2" />
+                  <rect x="204" y="17.0" width="4" height="76" rx="2" />
+                  <rect x="216" y="46.0" width="4" height="18" rx="2" />
+                  <rect x="228" y="37.5" width="4" height="35" rx="2" />
+                  <rect x="240" y="29.0" width="4" height="52" rx="2" />
+                  <rect x="252" y="20.5" width="4" height="69" rx="2" />
+                  <rect x="264" y="12.0" width="4" height="86" rx="2" />
+                  <rect x="276" y="41.0" width="4" height="28" rx="2" />
+                  <rect x="288" y="32.5" width="4" height="45" rx="2" />
+                  <rect x="300" y="24.0" width="4" height="62" rx="2" />
+                  <rect x="312" y="15.5" width="4" height="79" rx="2" />
+                  <rect x="324" y="44.5" width="4" height="21" rx="2" />
+                  <rect x="336" y="36.0" width="4" height="38" rx="2" />
+                  <rect x="348" y="27.5" width="4" height="55" rx="2" />
+                  <rect x="360" y="19.0" width="4" height="72" rx="2" />
+                  <rect x="372" y="48.0" width="4" height="14" rx="2" />
+                  <rect x="384" y="39.5" width="4" height="31" rx="2" />
+                  <rect x="396" y="31.0" width="4" height="48" rx="2" />
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 08 / The close. -->
+      <section class="kiri-layer" data-scene="brand" data-edit="kiriBrandScene">
+        <h1 class="kiri-title" data-edit="kiriBrandLine">
+          Ready to build the future<br />of <em>audio experiences</em>?
+        </h1>
+        <div class="kiri-cta" data-edit="kiriStartBuilding">
+          Get Started
+          <svg class="kiri-ic" viewBox="0 0 24 24">
+            <path d="M5 12h14" />
+            <path d="m12 5 7 7-7 7" />
+          </svg>
+        </div>
+      </section>
+    </div>
+  </main>
+</template>

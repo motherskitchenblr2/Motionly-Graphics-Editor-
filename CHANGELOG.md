@@ -1,55 +1,20 @@
 # Changelog
 
-All notable changes to Motionly will be documented in this file.
+## 2.1.0
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+- Separate Local and Cloud product modes around one shared editor.
+- Remove Tiffy and the AI chat column from the CLI Local editor, giving the preview more room and exposing presets, assets, and source from the toolbar.
+- Keep Tiffy, AI generation, and cloud projects in Cloud mode.
+- Configure Motify API endpoints from the environment.
 
-## [Unreleased]
+## 2.0.0
 
-### Added
-- Visual Svelte editor with scene, preview, properties, and timeline panels
-- Canvas selection, drag-to-move, and corner scaling
-- Visual text, transform, opacity, timing, easing, and preset controls
-- Resizable timeline with layer clips, trim handles, and playhead
-- Audio attachment and synchronized preview
-- MP4 export from the top toolbar with progress feedback
-- Direct save for opened files and the development-server project
-- Fullscreen preview and GitHub Star control
-- **Timeline clips with drag-and-drop from Assets panel**
-- **Clip blocks in `.motion` format with persistence**
-- **Audio blocks in `.motion` format for background audio**
-- **Left navigation rail with icon-based tabs** (Media, Audio, Text, Effects, Scenes, Adjustments, Settings)
-- **Organized Assets panel with folder structure**
-- **Preset browser with animated GIF thumbnails**
-- **Professional properties panel with custom sliders and styled inputs**
-- **Visual preset cards for animation selection**
-- **Asset preview on click without timeline disruption**
-- **Confirmation dialog for preset loading**
-- **Timeline clip thumbnails for visual reference**
-- **One-click clip deletion from timeline**
-
-### Changed
-- Made visual editing the primary workflow while keeping `.motion` as source of truth
-- Reworked the interface into a restrained dark creative-tool layout
-- **Improved left panel organization with dedicated navigation rail**
-- **Enhanced properties panel with polished controls**
-- **Assets now organized into Audio and Images & Graphics folders**
-
-## [1.0.0] - TBD
-
-Initial release (in development)
-
-### Features
-- `.motion` language for declarative animations
-- Canvas 2D renderer
-- Animation preset library
-- Scene graph system
-- Browser-supported MP4 export
-- Live preview with playback controls
-- Camera system with zoom and pan
-- Layer-based composition
-- Text animation presets
-- SVG/image asset support
-
-[Unreleased]: https://github.com/COPPSARY/Motionly/compare/v1.0.0...HEAD
+- Move authored projects to HTML/CSS plus caller-owned GSAP timelines.
+- Restore the npm CLI local workflow with `init`, `dev`, registry commands, and project/global skill installation.
+- Load and autosave local project source files in the visual editor.
+- Keep local AI keys server-side in the project's `.env` file.
+- Rebuilt Motify around TypeScript compositions, semantic DOM/SVG, and GSAP.
+- Added one direct runtime for preview, seeking, scene navigation, overrides, and export.
+- Replaced the effect catalog with a focused set of professional motion helpers.
+- Rebuilt the editor and 27-second product film on the new foundation.
+- Rewrote project documentation, examples, tests, and agent guidance.

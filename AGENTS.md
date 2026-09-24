@@ -1,100 +1,27 @@
 # Motionly Agent Notes
 
-Keep Motionly simple and visual.
+Motionly is a code-first motion graphics tool. Read `.agents/skills/write-motionly/SKILL.md` before substantial composition, timing, transition, camera, export, or product-film work.
 
-For substantial `.motion` creation, retiming, transition, or storyboard work, read `.agents/skills/write-motionly/SKILL.md` first.
+## Product rule
 
-## Product Rule
+HTML is the authored visual source. Scoped CSS styles the composition and `timeline.js` writes motion into a caller-owned GSAP timeline. A thin TypeScript adapter supplies metadata and mounts those files; it must not recreate the composition. Preview and export use that same mounted DOM and timeline.
 
-Motionly is a motion graphics editor around `.motion`. The user edits visually; `.motion` is the saved source format underneath.
+Keep the visual editor: centered preview, correct aspect ratio, Play/Pause/Restart, deterministic scrubber, storyboard scenes, selection, position/scale/rotation/opacity/text controls, assets, presets, and export.
 
-Do not make users hand-write `.motion` for normal animation creation.
+## Core Motion & Typography Rules
 
-## Current Scope
+- **Transitions MUST use MORPH, MATCH-CUT, or PARTICLE-REASSEMBLE**: Never use hard cuts, cross-dissolves, or fade-to-black.
+  - **MORPH**: Shape's own outline (width, height, border-radius) stretches and bends continuously.
+  - **MATCH-CUT**: Cut happens at the exact instant two shots share identical position and silhouette.
+  - **PARTICLE-REASSEMBLE**: Object fractures into physical shards that travel and reform into the next object.
+- **Single Full-Sentence Editorial Thoughts**: NEVER split thoughts into oversized headlines plus tiny subtitles. Use single, bold, full-size statements in standard `Inter 68px/700`, strictly centered (`xPercent: -50, yPercent: -50`).
+- **Giant-to-Settle Kinetic Zoom**: Statements enter massive/zoomed-in (`scale: 2.0+` with gradient fill) and dynamically pull back into centered focus.
+- **Continuous Word-by-Word Animation**: Typography always animates word-by-word with spring overshoot bounce (`back.out(1.35)`).
+- **Rule of Continuous Motion**: No frame is ever static; apply continuous drift, breathing scale, or live stroke drawing.
+- **No Premature Cursors & No Muddy Dark Veils**: Cursors arrive only with active typing; never use full-screen dark opacity overlays over luminous backgrounds.
 
-Work on:
+## Runtime boundary
 
-- professional centered canvas preview
-- correct aspect ratio
-- play/pause
-- timeline scrubber
-- time/frame display
-- zoom controls
-- object selection
-- visual controls for position, scale, rotation, opacity, text, duration, delay, easing
-- smooth useful animation presets
-- clean `.motion` serialization from UI edits
-- optional BYOK AI drafting that produces editable `.motion` through the existing parser and renderer pipeline
+`CompositionDefinition.build()` is the editor adapter boundary. It receives `root`, `timeline`, and `register`, mounts `composition.html`, then calls `timeline.js`. Do not introduce a second project representation, interpreter, conversion step, or renderer.
 
-The in-app Motionly Assistant stores its API key in the user's browser and sends requests directly to the selected provider. Generated source must be validated and loaded as a normal editable project; AI output is never a black-box final video.
-
-Avoid for now:
-
-- node graphs
-- hosted API-key proxies or a required Motionly AI account
-- autonomous project replacement without an explicit user load action
-- plugin systems
-- complex pipelines
-- huge preset libraries
-- speculative architecture
-
-## `.motion` Syntax
-
-Use this shape:
-
-```motion
-canvas {
-  size 1920x1080
-  fps 60
-  duration 5s
-  background #020308
-}
-
-text title {
-  value "Hello"
-  center
-  size 72
-  color #ffffff
-  opacity 1
-}
-
-animate title {
-  from {
-    opacity 0
-    y 80
-    blur 10
-  }
-
-  to {
-    opacity 1
-    y 0
-    blur 0
-  }
-
-  duration 1.2s
-  delay 0s
-  easing power3.out
-}
-```
-
-Prefer these properties: `x`, `y`, `scale`, `rotation`, `opacity`, `blur`, `size`, `color`, `center`, `duration`, `delay`, `easing`.
-
-Use `size`, not `fontSize`. Use `easing`, not `ease`.
-
-## Preset Guidance
-
-Presets should be subtle:
-
-- Fade in: `opacity 0` to target opacity
-- Rise in: `opacity 0`, `y + 80` to target
-- Scale in: `opacity 0`, `scale .85` to target
-- Blur reveal: `opacity 0`, `blur 12`, slight `y` offset to target
-- Soft drift: slight `x` offset to target
-
-Default to `power3.out` for smooth professional motion.
-
-Build scenes around one focal subject. Use scene color changes and purposeful object movement to mark progression; avoid constant camera drift and repeating the same fade on every object.
-
-For simple stroked SVG logos, `animation drawSVG(...)` animates their paths and resolves into the original artwork. Use it sparingly on a hero logo; use normal image reveals for detailed SVGs, mockups, and photos.
-
-Use the small transition set when a shot actually changes: `shapeWipe`, `irisWipe`, `maskReveal`, `dynamicSlide`, and camera `speedZoom`. Prefer one strong transition per scene over stacking effects.
+Use the helpers in `src/composition/presets.ts`, extend that small library when a reusable motion idea is genuinely missing, and keep each helper composable on a caller-owned timeline.

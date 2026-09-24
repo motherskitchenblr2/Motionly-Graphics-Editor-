@@ -1,86 +1,75 @@
 #!/usr/bin/env node
-// Zero-dependency Motionly CLI and local editor server.
 
-import { createServer } from 'node:http';
-import { handleFfmpegExportRequest } from './ffmpeg-export.js';
-import { createInterface } from 'node:readline/promises';
-import { spawn } from 'node:child_process';
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
-import { basename, dirname, extname, join, normalize, resolve, sep } from 'node:path';
+import { createServer } from "node:http";
+import { spawn } from "node:child_process";
+import {
+  copyFile,
+  mkdir,
+  readFile,
+  readdir,
+  rename,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { homedir } from "node:os";
+import {
+  basename,
+  dirname,
+  extname,
+  join,
+  normalize,
+  resolve,
+  sep,
+} from "node:path";
+import { fileURLToPath } from "node:url";
+import { createInterface } from "node:readline/promises";
+import { handleLocalAiRequest } from "./local-ai.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const root = normalize(join(here, '..'));
-const dist = join(root, 'dist');
-const skillTemplatePath = join(root, 'templates', 'motionly-skill', 'SKILL.md');
-const projectTemplateRoot = join(root, 'templates', 'project');
-// The full, maintained skill library (llms.txt index + focused SKILL.md files).
-// It ships inside the published package and is installed beside the top-level
-// SKILL.md as a `references/` bundle so agents get real depth, not one file.
-const skillsLibraryRoot = join(root, 'motionly-skills');
+const packageRoot = normalize(join(here, ".."));
+const distRoot = join(packageRoot, "dist");
+const templateRoot = join(packageRoot, "templates", "project");
+const registryRoot = join(packageRoot, "registry");
+const bundledSkillsRoot = join(packageRoot, ".agents", "skills");
+const PROJECT_FILES = [
+  "composition.html",
+  "styles.css",
+  "timeline.js",
+  "index.ts",
+];
+const SKILLS = ["write-motionly", "scene-design"];
+const MAX_PROJECT_BYTES = 15 * 1024 * 1024;
 
 const PROVIDERS = {
-  codex: '.agents/skills/motionly/SKILL.md',
-  claude: '.claude/skills/motionly/SKILL.md',
-  gemini: '.gemini/skills/motionly/SKILL.md',
-  opencode: '.opencode/skills/motionly/SKILL.md',
-  kiro: '.kiro/skills/motionly/SKILL.md',
-};
-
-const AGENT_LABELS = {
-  codex: 'Codex',
-  claude: 'Claude Code',
-  gemini: 'Gemini CLI',
-  opencode: 'opencode',
-  kiro: 'Kiro',
+  codex: ".agents/skills",
+  claude: ".claude/skills",
+  gemini: ".gemini/skills",
+  opencode: ".opencode/skills",
+  kiro: ".kiro/skills",
+  rayu: ".rayu/skills",
 };
 
 const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript; charset=utf-8',
-  '.mjs': 'text/javascript; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.json': 'application/json; charset=utf-8',
-  '.motion': 'text/plain; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.ico': 'image/x-icon',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.mp4': 'video/mp4',
-  '.webm': 'video/webm',
-  '.m4v': 'video/x-m4v',
-  '.mp3': 'audio/mpeg',
-  '.wav': 'audio/wav',
-  '.map': 'application/json; charset=utf-8',
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".otf": "font/otf",
+  ".mp4": "video/mp4",
+  ".webm": "video/webm",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
 };
-
-function parsePort(argv) {
-  const flag = argv.findIndex((arg) => arg === '--port' || arg === '-p');
-  if (flag >= 0 && argv[flag + 1]) return Number(argv[flag + 1]);
-  const env = Number(process.env.PORT);
-  return Number.isFinite(env) && env > 0 ? env : 4173;
-}
-
-function optionValues(argv, name) {
-  return argv.flatMap((arg, index) => (arg === name && argv[index + 1] ? [argv[index + 1]] : []));
-}
-
-function firstPositional(argv) {
-  for (let index = 0; index < argv.length; index += 1) {
-    if (argv[index] === '--port' || argv[index] === '-p') {
-      index += 1;
-    } else if (!argv[index].startsWith('-')) {
-      return argv[index];
-    }
-  }
-  return undefined;
-}
 
 async function exists(path) {
   try {
@@ -91,384 +80,540 @@ async function exists(path) {
   }
 }
 
-async function ensureBuilt() {
-  if (await exists(join(dist, 'index.html'))) return true;
-  console.error(
-    '\nMotionly is not built yet.\n' +
-      'Run "npm run build" in the project, or use the published package which ships the build.\n'
+function optionValues(argv, name) {
+  return argv.flatMap((arg, index) =>
+    arg === name && argv[index + 1] ? [argv[index + 1]] : [],
   );
-  return false;
 }
 
-function openBrowser(url) {
-  const command =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
-  const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
-  try {
-    spawn(command, args, { stdio: 'ignore', detached: true }).unref();
-  } catch {
-    // Opening the browser is best-effort.
-  }
+function optionValue(argv, name) {
+  const values = optionValues(argv, name);
+  if (values.length > 1) throw new Error(`Choose only one ${name}.`);
+  return values[0];
 }
 
-async function installSkills(base, providers) {
-  const unknown = providers.find((provider) => !PROVIDERS[provider]);
-  if (unknown)
-    throw new Error(`Unknown provider "${unknown}". Use: ${Object.keys(PROVIDERS).join(', ')}`);
-
-  const source = await readFile(skillTemplatePath, 'utf8');
-  const libraryAvailable = await exists(skillsLibraryRoot);
-  for (const provider of providers) {
-    const relative = PROVIDERS[provider];
-    const target = join(base, relative);
-    const skillDir = dirname(target);
-    await mkdir(skillDir, { recursive: true });
-    try {
-      await writeFile(target, source, { encoding: 'utf8', flag: 'wx' });
-      console.log(`Added ${provider}: ${target}`);
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      console.log(`Kept ${provider}: ${target} already exists`);
-    }
-    if (libraryAvailable) {
-      const added = await copyReferenceLibrary(skillsLibraryRoot, join(skillDir, 'references'));
-      if (added) console.log(`  + reference library: ${added} file${added === 1 ? '' : 's'}`);
+function firstPositional(argv) {
+  const optionsWithValues = new Set([
+    "--port",
+    "-p",
+    "--provider",
+    "--scope",
+    "--type",
+    "--tag",
+    "--dir",
+  ]);
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (optionsWithValues.has(arg)) {
+      index += 1;
+    } else if (!arg.startsWith("-")) {
+      return arg;
     }
   }
+  return undefined;
 }
 
-/**
- * Recursively copy the discovery index and focused SKILL.md files from the
- * skill library into an installed `references/` folder. Provider-specific
- * `agents/` metadata is skipped, and existing files are never overwritten so
- * user edits survive re-running the installer. Returns the number of new files.
- */
-async function copyReferenceLibrary(source, destination) {
-  let copied = 0;
-  await mkdir(destination, { recursive: true });
-  for (const entry of await readdir(source, { withFileTypes: true })) {
-    if (entry.name === 'agents') continue;
-    const from = join(source, entry.name);
-    const to = join(destination, entry.name);
-    if (entry.isDirectory()) {
-      copied += await copyReferenceLibrary(from, to);
-    } else if (
-      entry.name === 'SKILL.md' ||
-      entry.name === 'llms.txt' ||
-      entry.name === 'AGENTS.md'
-    ) {
-      try {
-        await writeFile(to, await readFile(from), { flag: 'wx' });
-        copied += 1;
-      } catch (error) {
-        if (error.code !== 'EEXIST') throw error;
-      }
+function parsePort(argv) {
+  const raw =
+    optionValue(argv, "--port") ??
+    optionValue(argv, "-p") ??
+    process.env.PORT ??
+    "4173";
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("Port must be between 1 and 65535.");
+  }
+  return port;
+}
+
+function safePath(rootPath, relative) {
+  const target = normalize(join(rootPath, relative));
+  return target === rootPath || target.startsWith(`${rootPath}${sep}`)
+    ? target
+    : null;
+}
+
+async function copyTree(source, target, overwrite = false) {
+  const info = await stat(source);
+  if (info.isDirectory()) {
+    await mkdir(target, { recursive: true });
+    let copied = 0;
+    for (const entry of await readdir(source)) {
+      copied += await copyTree(
+        join(source, entry),
+        join(target, entry),
+        overwrite,
+      );
     }
+    return copied;
   }
-  return copied;
-}
-
-async function choose(terminal, question, options) {
-  console.log(`\n${question}`);
-  options.forEach((option, index) => console.log(`  ${index + 1}. ${option.label}`));
-
-  while (true) {
-    const answer = (await terminal.question('Select [1]: ')).trim() || '1';
-    const index = Number(answer) - 1;
-    if (Number.isInteger(index) && options[index]) return options[index].value;
-    console.log(`Choose a number from 1 to ${options.length}.`);
-  }
-}
-
-async function selectSkillOptions(terminal, providers, scope) {
-  const selectedScope =
-    scope ??
-    (await choose(terminal, 'Where should Motionly install the skill?', [
-      { label: 'Project — this project only', value: 'project' },
-      { label: 'Global — every project for this user', value: 'global' },
-    ]));
-
-  let selectedProviders = providers;
-  if (!selectedProviders.length) {
-    const provider = await choose(terminal, 'Which agents should receive the Motionly skill?', [
-      { label: 'All supported agents', value: 'all' },
-      ...Object.keys(PROVIDERS).map((id) => ({ label: AGENT_LABELS[id], value: id })),
-    ]);
-    selectedProviders = provider === 'all' ? Object.keys(PROVIDERS) : [provider];
-  }
-
-  return { providers: [...new Set(selectedProviders)], scope: selectedScope };
-}
-
-function skillBase(scope, projectBase) {
-  return scope === 'global' ? homedir() : projectBase;
+  await mkdir(dirname(target), { recursive: true });
+  if (!overwrite && (await exists(target))) return 0;
+  await copyFile(source, target);
+  return 1;
 }
 
 function parseSkillOptions(argv) {
-  const scopes = optionValues(argv, '--scope');
-  if (scopes.length > 1) throw new Error('Choose only one --scope.');
-  const scope = scopes[0];
-  if (scope && scope !== 'project' && scope !== 'global')
+  const scope = optionValue(argv, "--scope") ?? "project";
+  if (scope !== "project" && scope !== "global") {
     throw new Error('Scope must be "project" or "global".');
-
-  const providers = argv.includes('--all')
-    ? Object.keys(PROVIDERS)
-    : optionValues(argv, '--provider');
-  return { providers, scope };
-}
-
-async function resolveSkillOptions(argv) {
-  let options = parseSkillOptions(argv);
-  if (
-    process.stdin.isTTY &&
-    process.stdout.isTTY &&
-    (!options.scope || !options.providers.length)
-  ) {
-    console.log('\nMotionly skill setup');
-    const terminal = createInterface({ input: process.stdin, output: process.stdout });
-    try {
-      options = await selectSkillOptions(terminal, options.providers, options.scope);
-    } finally {
-      terminal.close();
-    }
-  } else {
-    options.scope ??= 'project';
   }
-
-  if (!options.providers.length)
+  const providers = argv.includes("--all")
+    ? Object.keys(PROVIDERS)
+    : optionValues(argv, "--provider");
+  const unknown = providers.find((provider) => !PROVIDERS[provider]);
+  if (unknown)
     throw new Error(
-      'Choose --provider <name> or --all. Add --scope project|global to choose where.'
+      `Unknown provider "${unknown}". Use: ${Object.keys(PROVIDERS).join(", ")}`,
     );
-  return options;
+  return { scope, providers: [...new Set(providers)] };
 }
 
-async function promptForAgent(scope) {
-  const terminal = createInterface({ input: process.stdin, output: process.stdout });
+async function chooseProvider() {
+  if (!process.stdin.isTTY || !process.stdout.isTTY)
+    return Object.keys(PROVIDERS);
+  const terminal = createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
   try {
-    const choice = await choose(terminal, 'Which agent are you using?', [
-      ...Object.keys(PROVIDERS).map((id) => ({ label: AGENT_LABELS[id], value: id })),
-      { label: 'All supported agents', value: 'all' },
-    ]);
-    const providers = choice === 'all' ? Object.keys(PROVIDERS) : [choice];
-    return { providers, scope };
+    console.log("\nWhich coding agent should receive the Motify skills?");
+    const entries = [...Object.keys(PROVIDERS), "all"];
+    entries.forEach((provider, index) =>
+      console.log(`  ${index + 1}. ${provider}`),
+    );
+    const answer = (await terminal.question("Select [1]: ")).trim() || "1";
+    const selected = entries[Number(answer) - 1];
+    if (!selected) throw new Error("Invalid agent selection.");
+    return selected === "all" ? Object.keys(PROVIDERS) : [selected];
   } finally {
     terminal.close();
   }
 }
 
-async function initProject(name, argv = []) {
-  if (!name || name.startsWith('-'))
-    throw new Error('Usage: npx @coppsary/motionly init <project-folder>');
+async function installSkills(base, providers, overwrite = false) {
+  for (const provider of providers) {
+    const providerRoot = join(base, PROVIDERS[provider]);
+    let copied = 0;
+    for (const skill of SKILLS) {
+      const source = join(bundledSkillsRoot, skill);
+      if (!(await exists(source)))
+        throw new Error(`The package is missing its ${skill} skill.`);
+      copied += await copyTree(source, join(providerRoot, skill), overwrite);
+    }
+    console.log(
+      `${overwrite ? "Updated" : "Added"} ${provider}: ${copied} skill file${copied === 1 ? "" : "s"}`,
+    );
+  }
+}
+
+async function initProject(name, argv) {
+  if (!name || name.startsWith("-"))
+    throw new Error("Usage: motify init <project-folder>");
   const target = resolve(name);
   if (await exists(target)) {
-    if ((await readdir(target)).length) throw new Error(`Folder is not empty: ${target}`);
+    if ((await readdir(target)).length)
+      throw new Error(`Folder is not empty: ${target}`);
   } else {
     await mkdir(target, { recursive: true });
   }
-
-  const created = new Date().toISOString();
-  const replacements = { '{{name}}': basename(target), '{{created}}': created };
-  for (const filename of ['AGENTS.md', 'project.motion', 'meta.json', 'README.md']) {
-    let content = await readFile(join(projectTemplateRoot, filename), 'utf8');
-    for (const [token, value] of Object.entries(replacements))
-      content = content.replaceAll(token, value);
-    await writeFile(join(target, filename), content, { encoding: 'utf8', flag: 'wx' });
+  for (const entry of await readdir(templateRoot)) {
+    let source = await readFile(join(templateRoot, entry), "utf8");
+    source = source.replaceAll("{{name}}", basename(target));
+    await writeFile(join(target, entry), source, {
+      encoding: "utf8",
+      flag: "wx",
+    });
   }
-  await mkdir(join(target, 'assets'));
+  await mkdir(join(target, "assets"), { recursive: true });
   console.log(`Created ${target}`);
-  // Skills install unless opted out. Explicit --provider/--all/--scope flags win
-  // (non-interactive/CI). Otherwise, in a terminal, ask which agent to set up;
-  // with no terminal and no flags, default to every supported agent.
-  if (!argv.includes('--skip-skills') && !argv.includes('--no-skills')) {
-    const explicit = parseSkillOptions(argv);
-    const scope = explicit.scope ?? 'project';
-    let providers = explicit.providers;
-    if (!providers.length) {
-      providers =
-        process.stdin.isTTY && process.stdout.isTTY
-          ? (await promptForAgent(scope)).providers
-          : Object.keys(PROVIDERS);
-    }
-    if (providers.length) await installSkills(skillBase(scope, target), providers);
+  if (!argv.includes("--skip-skills") && !argv.includes("--no-skills")) {
+    const options = parseSkillOptions(argv);
+    const providers = options.providers.length
+      ? options.providers
+      : await chooseProvider();
+    await installSkills(
+      options.scope === "global" ? homedir() : target,
+      providers,
+    );
   }
-  if (process.stdin.isTTY && process.stdout.isTTY) {
-    console.log(`\n  To reopen later: cd ${name} && npx @coppsary/motionly dev`);
+  console.log(`\nNext: cd ${name} && npx @coppsary/motify dev`);
+  if (
+    process.stdin.isTTY &&
+    process.stdout.isTTY &&
+    !argv.includes("--no-open")
+  ) {
     await serveEditor(argv, target);
   }
 }
 
-async function readRequestBody(request, maximum = 5_000_000) {
-  let source = '';
-  for await (const chunk of request) {
-    source += chunk;
-    if (source.length > maximum) throw new Error('TOO_LARGE');
+function readMetadata(indexSource, projectName) {
+  const match =
+    /export\s+const\s+motionlyMetadata\s*=\s*(\{[\s\S]*?\})\s+as\s+const/.exec(
+      indexSource,
+    );
+  if (match?.[1]) {
+    try {
+      return JSON.parse(match[1]);
+    } catch {
+      // Fall through to compatibility metadata for hand-authored adapters.
+    }
   }
-  return source;
+  const text = (key) =>
+    new RegExp(`\\b${key}\\s*:\\s*["']([^"']+)["']`).exec(indexSource)?.[1];
+  const number = (key, fallback) => {
+    const value = Number(
+      new RegExp(`\\b${key}\\s*:\\s*([0-9.]+)`).exec(indexSource)?.[1],
+    );
+    return Number.isFinite(value) ? value : fallback;
+  };
+  const duration = number("duration", 5);
+  return {
+    id: text("id") ?? projectName.toLowerCase().replace(/[^a-z0-9-_]/g, "-"),
+    title: text("title") ?? projectName,
+    description: text("description") ?? "Local Motify composition",
+    width: number("width", 1920),
+    height: number("height", 1080),
+    fps: number("fps", 60),
+    duration,
+    scenes: [
+      { id: "main", label: "Main", start: 0, duration, accent: "#7657ff" },
+    ],
+  };
 }
 
-function safeFile(rootPath, pathname) {
-  const filePath = normalize(join(rootPath, pathname));
-  return filePath === rootPath || filePath.startsWith(`${rootPath}${sep}`) ? filePath : null;
+async function readProject(projectRoot) {
+  const files = {};
+  for (const filename of PROJECT_FILES)
+    files[filename] = await readFile(join(projectRoot, filename), "utf8");
+  return {
+    name: basename(projectRoot),
+    files,
+    metadata: readMetadata(files["index.ts"], basename(projectRoot)),
+    assets: await listProjectAssets(join(projectRoot, "assets")),
+  };
 }
 
-async function serveFile(response, filePath, method = 'GET') {
-  const info = await stat(filePath);
-  if (!info.isFile()) throw new Error('NOT_FOUND');
-  response.writeHead(200, {
-    'Content-Type': MIME[extname(filePath).toLowerCase()] ?? 'application/octet-stream',
-    'Content-Length': info.size,
+async function listProjectAssets(folder, prefix = "") {
+  const assets = [];
+  for (const entry of await readdir(folder, { withFileTypes: true })) {
+    const name = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      assets.push(...(await listProjectAssets(join(folder, entry.name), name)));
+    } else if (entry.isFile()) {
+      assets.push(name);
+    }
+  }
+  return assets.sort();
+}
+
+async function readJsonBody(request) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.byteLength;
+    if (size > MAX_PROJECT_BYTES) throw new Error("TOO_LARGE");
+    chunks.push(chunk);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
+}
+
+async function writeProject(projectRoot, payload) {
+  const files = payload?.files;
+  if (
+    !files ||
+    PROJECT_FILES.some((filename) => typeof files[filename] !== "string")
+  ) {
+    throw new Error("INVALID_PROJECT");
+  }
+  if (
+    !/<template\b/i.test(files["composition.html"]) ||
+    !/build[A-Za-z0-9_$]*Timeline\s*[=(]/.test(files["timeline.js"])
+  ) {
+    throw new Error("INVALID_PROJECT");
+  }
+  for (const filename of PROJECT_FILES) {
+    const target = join(projectRoot, filename);
+    const temporary = `${target}.motionly-tmp`;
+    await writeFile(temporary, files[filename], "utf8");
+    await rename(temporary, target);
+  }
+}
+
+function sendJson(response, status, value) {
+  const body = JSON.stringify(value);
+  response.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Content-Length": Buffer.byteLength(body),
+    "Cache-Control": "no-store",
   });
-  response.end(method === 'HEAD' ? undefined : await readFile(filePath));
+  response.end(body);
 }
 
-async function serveEditor(argv, projectFolder = null) {
-  if (!(await ensureBuilt())) process.exitCode = 1;
-  if (process.exitCode) return;
+async function serveFile(response, path, method = "GET") {
+  const info = await stat(path);
+  if (!info.isFile()) throw new Error("NOT_FOUND");
+  response.writeHead(200, {
+    "Content-Type":
+      MIME[extname(path).toLowerCase()] ?? "application/octet-stream",
+    "Content-Length": info.size,
+  });
+  response.end(method === "HEAD" ? undefined : await readFile(path));
+}
 
-  const projectRoot = projectFolder ? resolve(projectFolder) : null;
-  const projectPath = projectRoot ? join(projectRoot, 'project.motion') : null;
-  const assetsRoot = projectRoot ? join(projectRoot, 'assets') : null;
-  if (projectPath && !(await exists(projectPath))) throw new Error(`Missing ${projectPath}`);
-  if (assetsRoot && !(await exists(assetsRoot))) throw new Error(`Missing ${assetsRoot}`);
+async function serveLocalEditor(response, method = "GET") {
+  const bundledHtml = await readFile(join(distRoot, "index.html"), "utf8");
+  const markedHtml = bundledHtml.replace(
+    '<meta name="motify-mode" content="cloud"',
+    '<meta name="motify-mode" content="local"',
+  );
+  const html =
+    markedHtml === bundledHtml
+      ? bundledHtml.replace(
+          "</head>",
+          '  <meta name="motify-mode" content="local" />\n  </head>',
+        )
+      : markedHtml;
+  response.writeHead(200, {
+    "Content-Type": MIME[".html"],
+    "Content-Length": Buffer.byteLength(html),
+  });
+  response.end(method === "HEAD" ? undefined : html);
+}
 
+function openBrowser(url) {
+  const command =
+    process.platform === "darwin"
+      ? "open"
+      : process.platform === "win32"
+        ? "cmd"
+        : "xdg-open";
+  const args = process.platform === "win32" ? ["/c", "start", "", url] : [url];
+  try {
+    spawn(command, args, {
+      stdio: "ignore",
+      detached: true,
+      windowsHide: true,
+    }).unref();
+  } catch {
+    // Browser opening is best-effort.
+  }
+}
+
+async function serveEditor(argv, folder) {
+  if (!(await exists(join(distRoot, "index.html")))) {
+    throw new Error(
+      'Motify is not built. Run "npm run build", or use the published package.',
+    );
+  }
+  const projectRoot = folder ? resolve(folder) : null;
+  if (projectRoot) {
+    const missing = [];
+    for (const filename of PROJECT_FILES)
+      if (!(await exists(join(projectRoot, filename)))) missing.push(filename);
+    if (missing.length)
+      throw new Error(
+        `Not a Motify v2 project; missing: ${missing.join(", ")}`,
+      );
+    await mkdir(join(projectRoot, "assets"), { recursive: true });
+  }
   const port = parsePort(argv);
-  if (!Number.isFinite(port) || port < 1 || port > 65535)
-    throw new Error('Port must be between 1 and 65535.');
-  const noOpen = argv.includes('--no-open');
-
   const server = createServer(async (request, response) => {
     try {
-      const url = new URL(request.url ?? '/', 'http://localhost');
+      const url = new URL(request.url ?? "/", "http://motionly.local");
       const pathname = decodeURIComponent(url.pathname);
+      if (pathname === "/" || pathname === "/index.html") {
+        return await serveLocalEditor(response, request.method);
+      }
+      if (
+        await handleLocalAiRequest(
+          request,
+          response,
+          projectRoot ?? process.cwd(),
+        )
+      )
+        return;
 
-      if (await handleFfmpegExportRequest(request, response)) return;
-
-      if (projectPath && pathname === '/api/motion-project') {
-        if (request.method === 'GET' || request.method === 'HEAD') {
-          const source = await readFile(projectPath);
-          response.writeHead(200, {
-            'Content-Type': 'text/plain; charset=utf-8',
-            'Content-Length': source.length,
-            'X-Motionly-Project-Name': basename(projectPath),
-            'Cache-Control': 'no-store',
+      if (pathname === "/api/local-project") {
+        if (!projectRoot)
+          return sendJson(response, 404, {
+            error: "No local project is open.",
           });
-          response.end(request.method === 'HEAD' ? undefined : source);
-          return;
+        if (request.method === "GET" || request.method === "HEAD") {
+          const project = await readProject(projectRoot);
+          if (request.method === "HEAD") return response.writeHead(204).end();
+          return sendJson(response, 200, project);
         }
-        if (request.method === 'PUT') {
-          const source = await readRequestBody(request);
-          if (!source.includes('canvas {')) {
-            response.writeHead(400).end('Invalid .motion project');
-            return;
-          }
-          await writeFile(projectPath, source, 'utf8');
-          response.writeHead(204).end();
-          return;
+        if (request.method === "PUT") {
+          await writeProject(projectRoot, await readJsonBody(request));
+          return response.writeHead(204).end();
         }
-        response.writeHead(405, { Allow: 'GET, HEAD, PUT' }).end();
-        return;
+        return response.writeHead(405, { Allow: "GET, HEAD, PUT" }).end();
       }
 
-      if (pathname.startsWith('/assets/')) {
-        const bundledAsset = safeFile(dist, pathname.slice(1));
-        if (bundledAsset && (await exists(bundledAsset))) {
-          await serveFile(response, bundledAsset, request.method);
-          return;
+      if (
+        pathname.startsWith("/assets/") &&
+        (request.method === "GET" || request.method === "HEAD")
+      ) {
+        const bundled = safePath(distRoot, pathname.slice(1));
+        if (bundled && (await exists(bundled)))
+          return await serveFile(response, bundled, request.method);
+        if (projectRoot) {
+          const projectAsset = safePath(
+            join(projectRoot, "assets"),
+            pathname.slice("/assets/".length),
+          );
+          if (!projectAsset) return response.writeHead(403).end("Forbidden");
+          return await serveFile(response, projectAsset, request.method);
         }
       }
 
-      if (assetsRoot && pathname.startsWith('/assets/')) {
-        const filePath = safeFile(assetsRoot, pathname.slice('/assets/'.length));
-        if (!filePath) {
-          response.writeHead(403).end('Forbidden');
-          return;
-        }
-        await serveFile(response, filePath, request.method);
-        return;
-      }
-
-      let relative = pathname.endsWith('/') ? `${pathname}index.html` : pathname;
-      let filePath = safeFile(dist, relative.replace(/^\/+/, ''));
-      if (!filePath) {
-        response.writeHead(403).end('Forbidden');
-        return;
-      }
+      const relative = pathname.endsWith("/")
+        ? `${pathname}index.html`
+        : pathname;
+      const file = safePath(distRoot, relative.replace(/^\/+/, ""));
+      if (!file) return response.writeHead(403).end("Forbidden");
       try {
-        await serveFile(response, filePath, request.method);
+        await serveFile(response, file, request.method);
       } catch {
-        await serveFile(response, join(dist, 'index.html'), request.method);
+        await serveLocalEditor(response, request.method);
       }
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
       const status =
-        error.message === 'TOO_LARGE' ? 413 : error.message === 'NOT_FOUND' ? 404 : 500;
-      response.writeHead(status).end(status === 500 ? 'Internal Server Error' : error.message);
+        message === "TOO_LARGE"
+          ? 413
+          : message === "INVALID_PROJECT"
+            ? 400
+            : message === "NOT_FOUND"
+              ? 404
+              : 500;
+      response
+        .writeHead(status)
+        .end(status === 500 ? message : message.replaceAll("_", " "));
     }
   });
+  await new Promise((resolveListen, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", resolveListen);
+  });
+  const url = `http://127.0.0.1:${port}`;
+  console.log(
+    `\nMotify is running at ${url}${projectRoot ? `\nProject: ${projectRoot}` : ""}\nPress Ctrl+C to stop.\n`,
+  );
+  if (!argv.includes("--no-open")) openBrowser(url);
+}
 
-  server.listen(port, () => {
-    const url = `http://localhost:${port}${projectRoot ? '/editor' : ''}`;
+async function findRegistryItem(name) {
+  for (const group of ["examples", "blocks", "components"]) {
+    const folder = join(registryRoot, group, name);
+    const metadata = join(folder, "registry-item.json");
+    if (await exists(metadata))
+      return { folder, item: JSON.parse(await readFile(metadata, "utf8")) };
+  }
+  return null;
+}
+
+async function catalog(argv) {
+  const manifest = JSON.parse(
+    await readFile(join(registryRoot, "registry.json"), "utf8"),
+  );
+  const type = optionValue(argv, "--type")
+    ?.replace(/^hyperframes:/, "")
+    .replace(/s$/, "");
+  const tag = optionValue(argv, "--tag");
+  const show = optionValue(argv, "--show");
+  if (show) {
+    const found = await findRegistryItem(show);
+    if (!found) throw new Error(`Unknown registry item "${show}".`);
+    const sourceFile = found.item.files?.[0]?.path;
+    if (!sourceFile) throw new Error(`${show} has no installable source.`);
+    console.log(await readFile(join(found.folder, sourceFile), "utf8"));
+    return;
+  }
+  const items = manifest.items.filter((item) => {
+    const itemType = String(item.type)
+      .replace(/^hyperframes:/, "")
+      .replace(/s$/, "");
+    return (!type || type === itemType) && (!tag || item.tags?.includes(tag));
+  });
+  if (argv.includes("--json"))
+    return console.log(JSON.stringify(items, null, 2));
+  for (const item of items)
     console.log(
-      `\n  Motionly is running.\n  Open this URL in your browser: ${url}${projectRoot ? `\n  Project: ${projectRoot}` : ''}\n  Press Ctrl+C to stop.\n`
+      `${item.name.padEnd(34)} ${String(item.type).replace("hyperframes:", "").padEnd(12)} ${item.description}`,
     );
-    if (!noOpen) openBrowser(url);
-  });
+}
 
-  server.on('error', (error) => {
-    if (error.code === 'EADDRINUSE') {
-      console.error(
-        `Port ${port} is in use. Try: npx @coppsary/motionly ${projectRoot ? 'dev ' : ''}--port ${port + 1}`
-      );
-      process.exitCode = 1;
-      return;
-    }
-    throw error;
-  });
+async function addRegistryItem(name, argv) {
+  if (!name || name.startsWith("-"))
+    throw new Error("Usage: motify add <registry-name>");
+  const found = await findRegistryItem(name);
+  if (!found) throw new Error(`Unknown registry item "${name}".`);
+  const base = resolve(optionValue(argv, "--dir") ?? ".");
+  let copied = 0;
+  for (const file of found.item.files ?? []) {
+    const source = safePath(found.folder, file.path);
+    const target = safePath(base, file.target);
+    if (!source || !target)
+      throw new Error(`Unsafe registry path in "${name}".`);
+    copied += await copyTree(source, target, false);
+  }
+  console.log(`Added ${name}: ${copied} file${copied === 1 ? "" : "s"}`);
 }
 
 function printHelp() {
-  console.log(`Motionly
+  console.log(`Motify
 
-  npx @coppsary/motionly init <project-folder>            Create a project; asks which agent to set up
-  npx @coppsary/motionly init <folder> --provider codex   Create a project; install for one agent (no prompt)
-  npx @coppsary/motionly init <folder> --all              Create a project; install for every agent
-  npx @coppsary/motionly init <folder> --skip-skills      Create a project without agent skills
-  npx @coppsary/motionly skills add                       Install agent skills into an existing project
-  npx @coppsary/motionly skills add --all
-  npx @coppsary/motionly skills add --provider <codex|claude|gemini|opencode|kiro>
-  npx @coppsary/motionly dev [project-folder]             Reopen and edit a local project
+  motify init <folder> [--provider codex | --all]   Create a v2 local project
+  motify dev [folder] [--port 4173] [--no-open]     Open a local project
+  motify skills add [--provider codex | --all]      Install bundled skills
+  motify skills update [--provider codex | --all]   Refresh bundled skills
+  motify catalog [--type component] [--tag <tag>]   Browse the registry
+  motify catalog --show <name>                      Print registry source
+  motify add <name> [--dir <folder>]                Install registry source
 
-Options: --scope <project|global>, --port <number>, --no-open`);
+Providers: ${Object.keys(PROVIDERS).join(", ")}
+Scopes: project (default), global`);
 }
 
 async function main() {
   const argv = process.argv.slice(2);
   const [command, subcommand] = argv;
-  if (command === 'skills') {
-    if (subcommand !== 'add')
-      throw new Error(
-        'Usage: npx @coppsary/motionly skills add [--provider <name> | --all] [--scope project|global]'
-      );
-    const options = await resolveSkillOptions(argv.slice(2));
-    await installSkills(skillBase(options.scope, process.cwd()), options.providers);
-    return;
+  if (command === "--version" || command === "-v") {
+    const pkg = JSON.parse(
+      await readFile(join(packageRoot, "package.json"), "utf8"),
+    );
+    return console.log(pkg.version);
   }
-  if (command === 'init') {
-    await initProject(argv[1], argv.slice(2));
-    return;
+  if (command === "help" || command === "--help" || command === "-h")
+    return printHelp();
+  if (command === "init") return await initProject(argv[1], argv.slice(2));
+  if (command === "dev")
+    return await serveEditor(
+      argv.slice(1),
+      firstPositional(argv.slice(1)) ?? ".",
+    );
+  if (command === "skills") {
+    if (subcommand !== "add" && subcommand !== "update")
+      throw new Error("Usage: motify skills <add|update>");
+    const options = parseSkillOptions(argv.slice(2));
+    const providers = options.providers.length
+      ? options.providers
+      : await chooseProvider();
+    return await installSkills(
+      options.scope === "global" ? homedir() : process.cwd(),
+      providers,
+      subcommand === "update",
+    );
   }
-  if (command === 'dev') {
-    const folder = firstPositional(argv.slice(1)) ?? '.';
-    await serveEditor(argv.slice(1), folder);
-    return;
-  }
-  if (command === 'help' || command === '--help' || command === '-h') {
-    printHelp();
-    return;
-  }
-  await serveEditor(argv);
+  if (command === "catalog") return await catalog(argv.slice(1));
+  if (command === "add") return await addRegistryItem(argv[1], argv.slice(2));
+  if (!command) return await serveEditor(argv, null);
+  throw new Error(`Unknown command "${command}". Run motify --help.`);
 }
 
 main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
+  console.error(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;
 });
